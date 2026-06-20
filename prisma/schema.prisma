@@ -1,0 +1,249 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ORG_ADMIN
+  MANAGER
+  EXECUTIVE
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  WON
+  LOST
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  settings  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users            User[]   @relation("CurrentOrganization")
+  members          OrganizationMember[]
+  customRoles      CustomRole[]
+  leads            Lead[]
+  projects         Project[]
+  whatsappAccounts WhatsAppAccount[]
+  conversations    Conversation[]
+  campaigns        Campaign[]
+  flows            Flow[]
+  templates        Template[]
+}
+
+model CustomRole {
+  id             String               @id @default(cuid())
+  name           String
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissions    Json                 @default("{}")
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  members        OrganizationMember[]
+
+  @@unique([name, organizationId])
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           Role         @default(EXECUTIVE)
+  customRoleId   String?
+  customRole     CustomRole?  @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, organizationId])
+}
+
+model User {
+  id             String       @id @default(cuid())
+  name           String?
+  email          String       @unique
+  emailVerified  DateTime?
+  hashedPassword String?
+  image          String?
+  role           Role         @default(EXECUTIVE) // Legacy role
+  organizationId String?
+  organization   Organization? @relation("CurrentOrganization", fields: [organizationId], references: [id])
+  memberships    OrganizationMember[]
+  assignedLeads  Lead[]
+  conversations  Conversation[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Project {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  type           String?
+  location       String?
+  brochureUrl    String?
+  virtualTourUrl String?
+  order          Int          @default(0)
+  status         String       @default("ACTIVE")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Lead {
+  id             String       @id @default(cuid())
+  name           String
+  phone          String?
+  email          String?
+  status         LeadStatus   @default(NEW)
+  assignedToId   String?
+  assignedTo     User?        @relation(fields: [assignedToId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model WhatsAppAccount {
+  id                String       @id @default(cuid())
+  name              String
+  appId             String?
+  phoneNumberId     String
+  wabaId            String
+  apiVersion        String       @default("v21.0")
+  accessToken       String
+  appSecret         String?
+  isDefaultIncoming Boolean      @default(false)
+  isDefaultOutgoing Boolean      @default(false)
+  autoReadReceipts  Boolean      @default(true)
+  webhookVerifyToken String?     @unique
+  status            String       @default("UNTESTED") // UNTESTED, CONNECTED, DISCONNECTED
+  lastTestedAt      DateTime?
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Conversation {
+  id              String       @id @default(cuid())
+  contactName     String?
+  phoneNumber     String
+  lastMessage     String?
+  lastMessageAt   DateTime?
+  unreadCount     Int          @default(0)
+  status          String       @default("open") // open, resolved
+  assignedToId    String?
+  assignedTo      User?        @relation(fields: [assignedToId], references: [id])
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  
+  // Flow State
+  activeFlowId    String?
+  activeFlow      Flow?        @relation(fields: [activeFlowId], references: [id], onDelete: SetNull)
+  currentFlowNodeId String?    // The ID of the node currently executing or waiting
+  flowVariables   Json?        @default("{}") // Extracted variables (e.g. name, phone)
+  tags            String[]     @default([])
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([phoneNumber, organizationId])
+}
+
+model Message {
+  id              String       @id @default(cuid())
+  conversationId  String
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  body            String?
+  direction       String       // inbound, outbound
+  status          String       @default("sent") // sending, sent, delivered, read, failed
+  tempId          String?      // for optimistic UI deduplication
+  
+  mediaId         String?      // Meta media ID from webhook
+  mediaType       String?      // 'image' | 'video' | 'audio' | 'document' | 'sticker'
+  mediaUrl        String?      // Permanent Supabase Storage public URL
+  mediaName       String?      // Original filename (for PDFs/docs)
+  waMessageId     String?      // Meta WhatsApp message ID
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Campaign {
+  id              String       @id @default(cuid())
+  name            String
+  description     String?
+  type            String       // marketing, utility
+  status          String       @default("Draft") // Draft, Active, Completed
+  templateName    String?
+  variableMapping String?      // e.g., "name"
+  audienceType    String       // csv, manual
+  audienceList    Json?        // Array of unique phone numbers
+  audienceCount   Int          @default(0)
+  deliveredCount  Int          @default(0)
+  readCount       Int          @default(0)
+  repliedCount    Int          @default(0)
+  sentAt          DateTime?
+  
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Flow {
+  id              String       @id @default(cuid())
+  name            String
+  description     String?
+  status          String       @default("Draft") // Draft, Active
+  nodes           Json         @default("[]")
+  edges           Json         @default("[]")
+  
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  conversations   Conversation[]
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Template {
+  id              String       @id @default(cuid())
+  name            String
+  category        String       // marketing, utility, authentication
+  language        String       // en_US, hi_IN, etc.
+  status          String       @default("Pending") // Draft, Pending, Approved, Rejected
+  
+  headerType      String       @default("none") // none, text, image, document
+  headerContent   String?
+  bodyContent     String
+  footerContent   String?
+  
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([name, organizationId])
+}

@@ -1,0 +1,59 @@
+"use server";
+
+import { prisma } from "@/auth";
+import { auth } from "@/auth";
+import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
+
+export async function updateOrganizationSettings(data: {
+  name?: string;
+  timezone?: string;
+  dateFormat?: string;
+  language?: string;
+  maskPhoneNumbers?: boolean;
+  emailNotifications?: boolean;
+  newMessageAlerts?: boolean;
+  campaignUpdates?: boolean;
+}) {
+  const session = await auth();
+  const cookieStore = await cookies();
+  const organizationId = cookieStore.get("activeOrganizationId")?.value || session?.user?.organizationId;
+
+  if (!session?.user || !organizationId) {
+    throw new Error("Unauthorized");
+  }
+
+  // Verify org admin
+  const membership = await prisma.organizationMember.findUnique({
+    where: { userId_organizationId: { userId: session.user.id, organizationId } }
+  });
+  
+  if (session.user.role !== "SUPER_ADMIN" && (!membership || membership.role !== "ORG_ADMIN")) {
+    throw new Error("You must be an Organization Admin to update settings");
+  }
+
+  const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+  if (!org) throw new Error("Organization not found");
+
+  const currentSettings = (org.settings as Record<string, any>) || {};
+  const newSettings = {
+    ...currentSettings,
+    timezone: data.timezone ?? currentSettings.timezone ?? "utc",
+    dateFormat: data.dateFormat ?? currentSettings.dateFormat ?? "ddmm",
+    language: data.language ?? currentSettings.language ?? "en",
+    maskPhoneNumbers: data.maskPhoneNumbers ?? currentSettings.maskPhoneNumbers ?? false,
+    emailNotifications: data.emailNotifications ?? currentSettings.emailNotifications ?? true,
+    newMessageAlerts: data.newMessageAlerts ?? currentSettings.newMessageAlerts ?? true,
+    campaignUpdates: data.campaignUpdates ?? currentSettings.campaignUpdates ?? true,
+  };
+
+  await prisma.organization.update({
+    where: { id: organizationId },
+    data: {
+      name: data.name || org.name,
+      settings: newSettings
+    }
+  });
+
+  revalidatePath("/settings/general");
+}
