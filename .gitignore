@@ -47,3 +47,6 @@ next-env.d.ts
 AGENTS.md
 CLAUDE.md
 Design.md
+
+# Agent config
+.agents
