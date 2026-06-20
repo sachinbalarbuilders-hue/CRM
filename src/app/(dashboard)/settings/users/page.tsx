@@ -154,7 +154,7 @@ export default function UsersPage() {
                   {/* Custom role selector */}
                   <Select
                     value={member.customRoleId || "none"}
-                    onValueChange={(val) => handleRoleChange(member.id, val)}
+                    onValueChange={(val) => handleRoleChange(member.id, val || "none")}
                     disabled={isPending}
                   >
                     <SelectTrigger className="w-[160px] h-8 text-xs bg-background">
@@ -235,7 +235,7 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="invite-role">Assign Custom Role (optional)</Label>
-              <Select value={inviteRoleId} onValueChange={setInviteRoleId}>
+              <Select value={inviteRoleId} onValueChange={(val) => setInviteRoleId(val || "")}>
                 <SelectTrigger id="invite-role" className="bg-background">
                   <span className="truncate">
                     {inviteRoleId && inviteRoleId !== "__empty__"

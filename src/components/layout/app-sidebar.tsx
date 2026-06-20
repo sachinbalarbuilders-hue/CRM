@@ -173,7 +173,7 @@ export function AppSidebar({
             </Dialog>
           </div>
           <SidebarGroupContent className="px-2 pt-1 pb-2">
-            <Select value={currentOrganizationId} onValueChange={handleSwitch}>
+            <Select value={currentOrganizationId} onValueChange={(val) => val && handleSwitch(val)}>
               <SelectTrigger className="w-full bg-transparent border-muted-foreground/30 focus:ring-0">
                 <span className="truncate">
                   {organizations.find((o) => o.id === currentOrganizationId)?.name || "Select Organization"}

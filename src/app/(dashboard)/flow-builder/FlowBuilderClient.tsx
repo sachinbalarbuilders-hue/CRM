@@ -111,8 +111,8 @@ function FlowBuilder({
   initialSavedNodes?: Node[] | null;
   initialSavedEdges?: Edge[] | null;
 }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialSavedNodes || initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialSavedEdges || initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialSavedNodes || (initialNodes as any));
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialSavedEdges || (initialEdges as any));
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -126,7 +126,7 @@ function FlowBuilder({
   const { screenToFlowPosition } = useReactFlow();
 
   const onConnect = useCallback(
-    (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
+    (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds as any) as any),
     [setEdges],
   );
 
@@ -174,14 +174,14 @@ function FlowBuilder({
 
   const updateNodeData = useCallback((key: string, value: any) => {
     setNodes((nds) =>
-      nds.map((n) => {
+      (nds.map((n) => {
         if (n.id === selectedNode?.id) {
           const updatedNode = { ...n, data: { ...n.data, [key]: value } };
           setSelectedNode(updatedNode);
           return updatedNode;
         }
         return n;
-      })
+      }) as any)
     );
   }, [selectedNode, setNodes]);
 
@@ -386,7 +386,7 @@ function FlowBuilder({
                         onChange={(e) => updateNodeData('mediaUrl', e.target.value)}
                       />
                     </div>
-                    {selectedNode.data.mediaUrl && (
+                    {(selectedNode.data.mediaUrl as string) && (
                       <div className="flex gap-2">
                         <Select 
                           value={selectedNode.data.mediaType as string || 'document'} 

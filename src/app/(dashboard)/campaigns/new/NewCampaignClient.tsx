@@ -122,7 +122,7 @@ export default function NewCampaignWizard({
 
   const handleManualChange = (val: string) => {
     setManualNumbers(val);
-    const phones = val.split("\n").map(l => l.trim().replace(/[^0-9+]/g, "")).filter(p => p.length >= 7);
+    const phones = val.split("\n").map((l: string) => l.trim().replace(/[^0-9+]/g, "")).filter((p: string) => p.length >= 7);
     const { unique, dupes } = parseAndDedup(phones);
     setParsedCount(unique.length);
     setDuplicateCount(dupes.length);
@@ -131,7 +131,7 @@ export default function NewCampaignWizard({
 
   const handleRemoveDuplicates = () => {
     if (audienceTab === "manual") {
-      const phones = manualNumbers.split("\n").map(l => l.trim().replace(/[^0-9+]/g, "")).filter(p => p.length >= 7);
+      const phones = manualNumbers.split("\n").map((l: string) => l.trim().replace(/[^0-9+]/g, "")).filter((p: string) => p.length >= 7);
       const { unique } = parseAndDedup(phones);
       setManualNumbers(unique.join("\n"));
       setDuplicateCount(0);

@@ -88,7 +88,7 @@ export function NewChatDialog({ organizations, activeOrganizationId, onSuccess, 
           {organizations.length > 1 && (
             <div className="space-y-2">
               <Label htmlFor="org">Organization</Label>
-              <Select value={orgId} onValueChange={setOrgId}>
+              <Select value={orgId} onValueChange={(val) => setOrgId(val || "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select organization" />
                 </SelectTrigger>

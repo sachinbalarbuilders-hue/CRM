@@ -42,7 +42,7 @@ export function AccountForm({ initialData }: AccountFormProps) {
     control,
     formState: { errors, isSubmitting },
   } = useForm<AccountFormData>({
-    resolver: zodResolver(accountSchema),
+    resolver: zodResolver(accountSchema) as any,
     defaultValues: initialData || {
       apiVersion: "v21.0",
       isDefaultIncoming: false,

@@ -51,6 +51,10 @@ export async function processFlow(conversationId: string, incomingText: string) 
     currentNodeId = triggerNode.id;
   }
 
+  // Track which node is next
+  let nextNodeId: string | null = currentNodeId;
+  let iterations = 0;
+  const MAX_ITERATIONS = 50; // Prevent infinite loops
   let processing = true;
   let currentId = currentNodeId;
 
@@ -67,7 +71,7 @@ export async function processFlow(conversationId: string, incomingText: string) 
       break;
     }
 
-    let nextNodeId = null;
+    let nextNodeId: string | null = null;
     const currentNode = nodes.find(n => n.id === currentId);
 
     if (currentNode?.type === "interactive_menu") {

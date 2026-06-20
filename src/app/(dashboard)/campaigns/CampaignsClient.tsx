@@ -22,7 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { deleteCampaign } from "./actions";
+import { deleteCampaign, launchCampaign } from "./actions";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -58,6 +58,15 @@ export function CampaignsClient({ campaigns }: { campaigns: any[] }) {
       toast.error("Failed to delete campaign");
     } finally {
       setIsDeleting(null);
+    }
+  };
+
+  const handleLaunch = async (id: string) => {
+    try {
+      await launchCampaign(id);
+      toast.success("Campaign launched successfully");
+    } catch (error) {
+      toast.error("Failed to launch campaign");
     }
   };
 
