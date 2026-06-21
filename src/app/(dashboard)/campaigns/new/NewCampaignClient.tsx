@@ -50,11 +50,13 @@ function NativeSelect({
 export default function NewCampaignWizard({ 
   organizationId,
   campaignId,
-  initialData 
+  initialData,
+  templates = []
 }: { 
   organizationId: string;
   campaignId?: string;
   initialData?: any;
+  templates?: any[];
 }) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
@@ -64,7 +66,7 @@ export default function NewCampaignWizard({
   const [campaignName, setCampaignName] = useState(initialData?.name || "");
   const [description, setDescription] = useState(initialData?.description || "");
   const [campaignType, setCampaignType] = useState(initialData?.type || "marketing");
-  const [template, setTemplate] = useState(initialData?.templateName === "site_visit_reminder" ? "t2" : "t1");
+  const [template, setTemplate] = useState(initialData?.templateName || (templates.length > 0 ? templates[0].name : ""));
   const [variable, setVariable] = useState(initialData?.variableMapping || "name");
 
   // Audience state
@@ -345,10 +347,7 @@ export default function NewCampaignWizard({
                 <NativeSelect
                   value={template}
                   onChange={setTemplate}
-                  options={[
-                    { value: "t1", label: "diwali_offer_v1 — Marketing" },
-                    { value: "t2", label: "site_visit_reminder — Utility" },
-                  ]}
+                  options={templates.length > 0 ? templates.map(t => ({ value: t.name, label: `${t.name} — ${t.category}` })) : [{ value: "", label: "No approved templates found" }]}
                 />
               </div>
 
@@ -372,7 +371,7 @@ export default function NewCampaignWizard({
                 <h4 className="font-medium text-sm">Summary</h4>
                 <div className="text-xs text-muted-foreground space-y-1">
                   <div className="flex justify-between"><span>Recipients</span><span className="font-medium text-foreground">{parsedCount.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Template</span><span className="font-medium text-foreground">{template === "t1" ? "diwali_offer_v1" : "site_visit_reminder"}</span></div>
+                  <div className="flex justify-between"><span>Template</span><span className="font-medium text-foreground">{template || "None selected"}</span></div>
                   <div className="flex justify-between"><span>Type</span><span className="font-medium text-foreground capitalize">{campaignType}</span></div>
                 </div>
               </div>
@@ -383,13 +382,26 @@ export default function NewCampaignWizard({
               <p className="text-xs text-muted-foreground text-center mb-3 font-medium">MESSAGE PREVIEW</p>
               <div className="rounded-xl border bg-muted/20 p-4">
                 <div className="bg-white text-zinc-900 rounded-lg p-3 shadow text-sm leading-relaxed relative pb-7">
-                  <div className="font-bold mb-1 text-sm">🎉 Diwali Special Offer!</div>
-                  <div className="whitespace-pre-wrap text-[13px]">
-                    Hi [Lead First Name], book a plot at Sunrise Valley this week and get a 50gm Silver Coin free!
-                  </div>
-                  <div className="text-[10px] text-zinc-500 mt-2 uppercase tracking-wide">
-                    Reply STOP to unsubscribe
-                  </div>
+                  {(() => {
+                    const selectedTpl = templates.find(t => t.name === template);
+                    if (!selectedTpl) return <div className="text-muted-foreground italic text-xs">No template selected</div>;
+                    
+                    return (
+                      <>
+                        {selectedTpl.headerContent && (
+                          <div className="font-bold mb-1 text-sm">{selectedTpl.headerContent}</div>
+                        )}
+                        <div className="whitespace-pre-wrap text-[13px]">
+                          {selectedTpl.bodyContent}
+                        </div>
+                        {selectedTpl.footerContent && (
+                          <div className="text-[10px] text-zinc-500 mt-2 uppercase tracking-wide">
+                            {selectedTpl.footerContent}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   <div className="absolute bottom-1.5 right-2 text-[10px] text-zinc-400">12:00 PM ✓✓</div>
                 </div>
               </div>
@@ -474,7 +486,7 @@ export default function NewCampaignWizard({
                       name: campaignName,
                       description,
                       type: campaignType,
-                      templateName: template === "t1" ? "diwali_offer_v1" : "site_visit_reminder",
+                      templateName: template,
                       variableMapping: variable,
                       audienceType: audienceTab,
                       audienceList: manualNumbers ? manualNumbers.split("\n") : [],
@@ -514,7 +526,7 @@ export default function NewCampaignWizard({
                         name: campaignName,
                         description,
                         type: campaignType,
-                        templateName: template === "t1" ? "diwali_offer_v1" : "site_visit_reminder",
+                        templateName: template,
                         variableMapping: variable,
                         audienceType: audienceTab,
                         audienceList: manualNumbers ? manualNumbers.split("\n") : [],

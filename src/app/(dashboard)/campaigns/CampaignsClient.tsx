@@ -42,6 +42,11 @@ const statusConfig: Record<string, { label: string; className: string; icon: Rea
     className: "bg-muted text-muted-foreground border-border",
     icon: <FileText className="h-3 w-3" />,
   },
+  "Paused (Rate Limit)": {
+    label: "Paused (Rate Limit)",
+    className: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+    icon: <Clock className="h-3 w-3" />,
+  },
 };
 
 export function CampaignsClient({ campaigns }: { campaigns: any[] }) {
@@ -168,18 +173,20 @@ export function CampaignsClient({ campaigns }: { campaigns: any[] }) {
                             {isDeleting === campaign.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {campaign.status === "Draft" && (
+                            {(campaign.status === "Draft" || campaign.status === "Paused (Rate Limit)") && (
                               <>
-                                <Link href={`/campaigns/${campaign.id}/edit`}>
-                                  <DropdownMenuItem className="cursor-pointer">
-                                    <Edit className="mr-2 h-4 w-4" /> Edit Draft
-                                  </DropdownMenuItem>
-                                </Link>
+                                {campaign.status === "Draft" && (
+                                  <Link href={`/campaigns/${campaign.id}/edit`}>
+                                    <DropdownMenuItem className="cursor-pointer">
+                                      <Edit className="mr-2 h-4 w-4" /> Edit Draft
+                                    </DropdownMenuItem>
+                                  </Link>
+                                )}
                                 <DropdownMenuItem 
                                   className="cursor-pointer text-green-600 focus:text-green-600"
                                   onClick={() => handleLaunch(campaign.id)}
                                 >
-                                  <Send className="mr-2 h-4 w-4" /> Launch Campaign
+                                  <Send className="mr-2 h-4 w-4" /> {campaign.status === "Draft" ? "Launch Campaign" : "Resume Campaign"}
                                 </DropdownMenuItem>
                               </>
                             )}

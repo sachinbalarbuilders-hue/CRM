@@ -237,6 +237,30 @@ export async function POST(request: Request) {
                 }
               }
             }
+          } else if (change.field === "messages" && change.value.statuses) {
+            // Handle message status updates (sent, delivered, read, failed)
+            const value = change.value;
+            for (const status of value.statuses) {
+              const { id: wamid, status: statusType, biz_opaque_callback_data: campaignId } = status;
+              
+              // Update the Message table status
+              await prisma.message.updateMany({
+                where: { waMessageId: wamid },
+                data: { status: statusType }
+              });
+
+              // If this was part of a campaign, update campaign metrics
+              if (campaignId) {
+                if (statusType === "read") {
+                  await prisma.campaign.update({
+                    where: { id: campaignId },
+                    data: { readCount: { increment: 1 } }
+                  }).catch(() => {}); // ignore if campaign deleted
+                } else if (statusType === "failed") {
+                  // If it failed, we could optionally decrement deliveredCount or track failures
+                }
+              }
+            }
           }
         }
       }

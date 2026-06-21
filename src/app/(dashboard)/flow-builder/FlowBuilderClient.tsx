@@ -200,11 +200,9 @@ function FlowBuilder({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: "balar_main_flow", // For now, hardcode a single flow ID for testing
           name: "Main Chatbot Flow",
           nodes,
           edges,
-          organizationId,
         }),
       });
 

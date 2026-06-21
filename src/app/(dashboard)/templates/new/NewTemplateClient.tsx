@@ -17,11 +17,13 @@ import { toast } from "sonner";
 export function NewTemplateClient({ 
   organizationId, 
   templateId, 
-  initialData 
+  initialData,
+  accounts
 }: { 
   organizationId: string;
   templateId?: string;
   initialData?: any;
+  accounts?: any[];
 }) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
@@ -33,40 +35,71 @@ export function NewTemplateClient({
   const [headerContent, setHeaderContent] = useState(initialData?.headerContent || "");
   const [bodyContent, setBodyContent] = useState(initialData?.bodyContent || "Hi {{1}}, thank you for registering with us!");
   const [footerContent, setFooterContent] = useState(initialData?.footerContent || "");
+  const [headerFile, setHeaderFile] = useState<File | null>(null);
+  const [accountId, setAccountId] = useState(initialData?.whatsAppAccountId || (accounts && accounts.length > 0 ? accounts[0].id : ""));
 
   const handleSave = async (status: string) => {
     if (!templateName.trim() || !bodyContent.trim()) {
       toast.error("Template name and body are required");
       return;
     }
+
+    if (!accountId) {
+      toast.error("Please select a WhatsApp account");
+      return;
+    }
+
+    const isMedia = headerType === "image" || headerType === "video" || headerType === "document";
+    const isChangingToMedia = isMedia && initialData?.headerType !== headerType;
+    
+    if (isMedia && !headerFile && (!templateId || isChangingToMedia)) {
+      toast.error("A sample file is required for media templates.");
+      return;
+    }
     
     setIsSaving(true);
     try {
-      const data = {
-        name: templateName,
-        category,
-        language,
-        headerType,
-        headerContent: headerType === "text" ? headerContent : undefined,
-        bodyContent,
-        footerContent,
-        status,
-        organizationId,
-      };
+      const formData = new FormData();
+      formData.append("name", templateName);
+      formData.append("category", category);
+      formData.append("language", language);
+      formData.append("headerType", headerType);
+      formData.append("bodyContent", bodyContent);
+      if (footerContent) formData.append("footerContent", footerContent);
+      if (headerType === "text" && headerContent) formData.append("headerContent", headerContent);
+      formData.append("status", status);
+      formData.append("organizationId", organizationId);
+      formData.append("whatsAppAccountId", accountId);
+      
+      if (headerFile) {
+        formData.append("file", headerFile);
+      }
 
       if (templateId) {
-        await updateTemplate(templateId, data);
+        await updateTemplate(templateId, formData);
       } else {
-        await createTemplate(data);
+        await createTemplate(formData);
       }
       
       toast.success(status === "Draft" ? "Template saved as draft" : "Template submitted for approval");
       router.push("/templates");
     } catch (error: any) {
-      toast.error("Failed to save template");
+      toast.error(error.message || "Failed to save template");
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const formatWhatsAppText = (text: string) => {
+    if (!text) return null;
+    const html = text
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\*([^\*]+)\*/g, "<strong>$1</strong>")
+      .replace(/_([^_]+)_/g, "<em>$1</em>")
+      .replace(/~([^~]+)~/g, "<del>$1</del>")
+      .replace(/```(.*?)```/gs, "<code class='bg-gray-100 p-1 rounded'>$1</code>");
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
   };
 
   return (
@@ -112,6 +145,21 @@ export function NewTemplateClient({
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
+                {accounts && accounts.length > 0 && (
+                  <div className="space-y-2 col-span-2">
+                    <Label>WhatsApp Account</Label>
+                    <Select value={accountId} onValueChange={setAccountId} disabled={!!templateId}>
+                      <SelectTrigger>
+                        <span className="truncate">{accounts?.find(a => a.id === accountId)?.name || "Select account"}</span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map(acc => (
+                          <SelectItem key={acc.id} value={acc.id}>{acc.name} ({acc.wabaId})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Category</Label>
                   <Select value={category} onValueChange={setCategory}>
@@ -129,12 +177,20 @@ export function NewTemplateClient({
                   <Label>Language</Label>
                   <Select value={language} onValueChange={setLanguage}>
                     <SelectTrigger>
-                      <span className="truncate">{language === "en_US" ? "English (US)" : language === "en_GB" ? "English (UK)" : "Hindi"}</span>
+                      <span className="truncate">
+                        {language === "en_US" ? "English (US)" : 
+                         language === "en_GB" ? "English (UK)" : 
+                         language === "en" ? "English" : 
+                         language === "hi_IN" || language === "hi" ? "Hindi" : 
+                         language}
+                      </span>
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="en">English</SelectItem>
                       <SelectItem value="en_US">English (US)</SelectItem>
                       <SelectItem value="en_GB">English (UK)</SelectItem>
                       <SelectItem value="hi_IN">Hindi</SelectItem>
+                      <SelectItem value="hi">Hindi (Generic)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -170,10 +226,22 @@ export function NewTemplateClient({
                     onChange={(e) => setHeaderContent(e.target.value)}
                   />
                 )}
-                {(headerType === "image" || headerType === "document") && (
-                  <div className="border-2 border-dashed rounded-md p-6 flex flex-col items-center justify-center text-muted-foreground">
-                    <p className="text-sm">Sample file upload required for approval</p>
-                    <Button variant="outline" size="sm" className="mt-2">Choose File</Button>
+                {(headerType === "image" || headerType === "video" || headerType === "document") && (
+                  <div className="border-2 border-dashed rounded-md p-6 flex flex-col items-center justify-center text-muted-foreground relative">
+                    <p className="text-sm mb-2">{headerFile ? headerFile.name : "Sample file upload required for approval"}</p>
+                    <Input 
+                      type="file" 
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      accept={headerType === "image" ? "image/*" : headerType === "video" ? "video/*" : ".pdf,.doc,.docx"}
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setHeaderFile(e.target.files[0]);
+                        }
+                      }}
+                    />
+                    <Button variant="outline" size="sm" className="pointer-events-none">
+                      {headerFile ? "Change File" : "Choose File"}
+                    </Button>
                   </div>
                 )}
               </div>
@@ -206,44 +274,55 @@ export function NewTemplateClient({
         </div>
 
         {/* Live Preview Panel */}
-        <div className="w-[400px] flex-shrink-0 flex flex-col items-center border rounded-xl bg-muted/20 p-6 overflow-y-auto">
+        <div className="w-[480px] flex-shrink-0 flex flex-col items-center border rounded-xl bg-muted/20 p-6 overflow-y-auto">
           <h3 className="font-semibold mb-6 text-muted-foreground">Live Preview</h3>
           
-          <div className="w-[320px] h-[650px] bg-[url('https://i.pinimg.com/736x/8c/98/99/8c98994518b575bfd8c949e91d20548b.jpg')] bg-cover bg-center rounded-[3rem] border-[8px] border-zinc-800 shadow-xl overflow-hidden relative flex flex-col">
-            {/* WhatsApp Header Mock */}
-            <div className="bg-[#075e54] text-white px-4 py-3 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs">P</div>
-              <div className="font-semibold text-sm">Plot CRM</div>
-            </div>
+          <div className="w-full max-w-[400px] h-[750px] bg-[#efeae2] bg-[url('https://i.pinimg.com/736x/8c/98/99/8c98994518b575bfd8c949e91d20548b.jpg')] bg-cover bg-center border border-gray-200 overflow-hidden relative flex flex-col font-sans">
             
             {/* Message Area */}
-            <ScrollArea className="flex-1 p-4">
-              <div className="bg-white text-zinc-900 rounded-lg p-3 shadow-sm text-[14px] leading-relaxed relative pb-6 w-max max-w-[90%]">
-                
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              
+              <div className="bg-white text-[#111b21] rounded-lg p-2 shadow-sm text-[14.2px] leading-[19px] relative pb-5 w-max max-w-[100%] self-start rounded-tl-none">
+                {/* Bubble Tail SVG */}
+                <svg viewBox="0 0 8 13" width="8" height="13" className="absolute top-0 -left-[8px] text-white">
+                  <path opacity="1" fill="currentColor" d="M1.533 3.568 8 12.193V1H2.812C1.042 1 .474 2.099 1.533 3.568z"></path>
+                </svg>
+
                 {headerType === "text" && headerContent && (
-                  <div className="font-bold mb-1">{headerContent}</div>
+                  <div className="font-bold mb-1 px-1 pt-1">{headerContent}</div>
                 )}
-                {(headerType === "image" || headerType === "document") && (
-                  <div className="w-full h-32 bg-muted rounded mb-2 flex items-center justify-center text-xs text-muted-foreground">
-                    [Media Header]
+                
+                {(headerType === "image" || headerType === "video" || headerType === "document") && (
+                  <div className="w-full min-w-[250px] aspect-video bg-[#e4e6eb] rounded-md mb-2 flex items-center justify-center overflow-hidden">
+                    {headerFile ? (
+                      <span className="truncate px-2 text-xs text-muted-foreground">{headerFile.name}</span>
+                    ) : headerType === "image" && headerContent && headerContent.startsWith("http") ? (
+                      <img src={headerContent} alt="Header" className="w-full h-full object-cover" />
+                    ) : headerType === "video" && headerContent && headerContent.startsWith("http") ? (
+                      <video src={headerContent} controls className="w-full h-full object-cover" />
+                    ) : headerType === "document" ? (
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#bcc0c4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    ) : (
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#bcc0c4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                    )}
                   </div>
                 )}
 
-                <div className="whitespace-pre-wrap">
-                  {bodyContent || "Message body..."}
+                <div className="whitespace-pre-wrap break-words px-1">
+                  {bodyContent ? formatWhatsAppText(bodyContent) : "Message body..."}
                 </div>
 
                 {footerContent && (
-                  <div className="text-[11px] text-zinc-500 mt-2 uppercase tracking-wide">
+                  <div className="text-[13px] text-zinc-500 mt-2 px-1">
                     {footerContent}
                   </div>
                 )}
 
-                <div className="absolute bottom-1.5 right-2 text-[10px] text-zinc-400">
-                  12:00 PM
+                <div className="absolute bottom-1 right-2 text-[11px] text-zinc-500">
+                  11:00
                 </div>
               </div>
-            </ScrollArea>
+            </div>
           </div>
         </div>
 

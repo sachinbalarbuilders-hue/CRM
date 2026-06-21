@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getTemplate } from "../../actions";
 import { NewTemplateClient } from "../../new/NewTemplateClient";
+import { prisma } from "@/auth";
 
 export default async function EditTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -24,5 +25,10 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ i
     redirect("/templates");
   }
 
-  return <NewTemplateClient organizationId={activeOrganizationId} templateId={template.id} initialData={template} />;
+  const accounts = await prisma.whatsAppAccount.findMany({
+    where: { organizationId: activeOrganizationId },
+    select: { id: true, name: true, wabaId: true }
+  });
+
+  return <NewTemplateClient organizationId={activeOrganizationId} templateId={template.id} initialData={template} accounts={accounts} />;
 }

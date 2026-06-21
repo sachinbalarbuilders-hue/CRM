@@ -21,27 +21,33 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { deleteTemplate } from "./actions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { deleteTemplate, syncTemplatesFromMeta } from "./actions";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-export function TemplatesClient({ templates }: { templates: any[] }) {
+export function TemplatesClient({ templates, organizationId, accounts }: { templates: any[], organizationId: string, accounts?: any[] }) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncAccountId, setSyncAccountId] = useState(accounts && accounts.length > 0 ? accounts[0].id : "");
 
   const filteredTemplates = templates.filter((t) =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleSync = async () => {
+    if (!syncAccountId) {
+      toast.error("Please select a WhatsApp account to sync from.");
+      return;
+    }
     setIsSyncing(true);
     try {
-      // Simulate API call to Meta
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await syncTemplatesFromMeta(syncAccountId);
       toast.success("Templates synced with Meta successfully!");
-    } catch (e) {
-      toast.error("Failed to sync templates");
+      window.location.reload();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to sync templates");
     } finally {
       setIsSyncing(false);
     }
@@ -70,7 +76,19 @@ export function TemplatesClient({ templates }: { templates: any[] }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleSync} disabled={isSyncing}>
+          {accounts && accounts.length > 0 && (
+            <Select value={syncAccountId} onValueChange={setSyncAccountId}>
+              <SelectTrigger className="w-[200px]">
+                <span className="truncate">{accounts?.find(a => a.id === syncAccountId)?.name || "Select account"}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map(acc => (
+                  <SelectItem key={acc.id} value={acc.id}>{acc.name} ({acc.wabaId})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button variant="outline" onClick={handleSync} disabled={isSyncing || !syncAccountId}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} /> 
             {isSyncing ? "Syncing..." : "Sync from Meta"}
           </Button>
@@ -150,13 +168,11 @@ export function TemplatesClient({ templates }: { templates: any[] }) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
 
-                        {template.status === "Draft" && (
                           <Link href={`/templates/${template.id}/edit`}>
                             <DropdownMenuItem className="cursor-pointer">
-                              <Edit className="mr-2 h-4 w-4" /> Edit Draft
+                              <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
                           </Link>
-                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
                           className="text-destructive cursor-pointer focus:text-destructive focus:bg-destructive/10"

@@ -13,11 +13,10 @@ export default async function FlowBuilderPage() {
     redirect("/auth/login");
   }
 
-  // Fetch the saved flow for this organization (assuming 'balar_main_flow' or any active flow)
+  // Fetch the saved flow for this organization
   const savedFlow = await prisma.flow.findFirst({
     where: { 
-      organizationId,
-      id: "balar_main_flow" // We hardcoded this in FlowBuilderClient's saveFlow for now
+      organizationId
     }
   });
 

@@ -114,9 +114,22 @@ export async function sendWhatsAppMessage({
         }
       };
     }
+  } else if (text && text.trim().match(/^https?:\/\/[^\s]+$/)) {
+    metaPayload.type = "interactive";
+    metaPayload.interactive = {
+      type: "cta_url",
+      body: { text: "Click the button below to view the link:" },
+      action: {
+        name: "cta_url",
+        parameters: {
+          display_text: "View Link",
+          url: text.trim()
+        }
+      }
+    };
   } else {
     metaPayload.type = "text";
-    metaPayload.text = { preview_url: false, body: text };
+    metaPayload.text = { preview_url: true, body: text };
   }
 
   // Send the message via Meta WhatsApp API
@@ -142,4 +155,111 @@ export async function sendWhatsAppMessage({
   }
 
   return message;
+}
+
+export async function sendWhatsAppTemplate({
+  organizationId,
+  phoneNumber,
+  templateName,
+  languageCode = "en_US",
+  components = [],
+  bizOpaqueCallbackData,
+  logBody,
+  logMediaType,
+  logMediaUrl
+}: {
+  organizationId: string;
+  phoneNumber: string;
+  templateName: string;
+  languageCode?: string;
+  components?: any[];
+  bizOpaqueCallbackData?: string;
+  logBody?: string;
+  logMediaType?: string;
+  logMediaUrl?: string;
+}) {
+  const account = await prisma.whatsAppAccount.findFirst({
+    where: { 
+      organizationId,
+      isDefaultOutgoing: true 
+    }
+  }) || await prisma.whatsAppAccount.findFirst({
+    where: { organizationId }
+  });
+
+  if (!account) {
+    throw new Error("No connected WhatsApp account found for this organization");
+  }
+
+  // Ensure there is a conversation log for this recipient
+  let conversation = await prisma.conversation.findFirst({
+    where: { phoneNumber, organizationId }
+  });
+
+  if (!conversation) {
+    conversation = await prisma.conversation.create({
+      data: {
+        phoneNumber,
+        organizationId,
+        status: "open"
+      }
+    });
+  }
+
+  const metaPayload: any = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: phoneNumber.replace(/[^0-9]/g, ''),
+    type: "template",
+    template: {
+      name: templateName,
+      language: {
+        code: languageCode
+      },
+      components: components
+    }
+  };
+
+  if (bizOpaqueCallbackData) {
+    metaPayload.biz_opaque_callback_data = bizOpaqueCallbackData;
+  }
+
+  const metaResponse = await fetch(`https://graph.facebook.com/${account.apiVersion}/${account.phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${account.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(metaPayload)
+  });
+
+  const metaResult = await metaResponse.json();
+
+  if (!metaResponse.ok) {
+    console.error("Meta API Template Error:", metaResult);
+    const errorCode = metaResult.error?.code || 'Unknown';
+    throw new Error(`Meta API error [${errorCode}]: ${metaResult.error?.message || 'Unknown error'}`);
+  }
+
+  // Log successful message
+  await prisma.message.create({
+    data: {
+      conversationId: conversation.id,
+      body: logBody || `[Template: ${templateName}]`,
+      mediaType: logMediaType,
+      mediaUrl: logMediaUrl,
+      direction: "outbound",
+      status: "sent"
+    }
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      lastMessage: logMediaType ? `[${logMediaType}] ${logBody || `Template: ${templateName}`}` : (logBody || `[Template: ${templateName}]`),
+      lastMessageAt: new Date()
+    }
+  });
+
+  return metaResult;
 }
