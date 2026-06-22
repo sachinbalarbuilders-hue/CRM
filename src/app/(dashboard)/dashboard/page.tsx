@@ -16,25 +16,32 @@ export default async function DashboardPage() {
     return <div className="p-4">Please select an organization to view insights.</div>;
   }
 
-  // 1. Fetch High-Level Metrics
-  const totalConversations = await prisma.conversation.count({ where: { organizationId } });
-  const unreadConversations = await prisma.conversation.count({ where: { organizationId, unreadCount: { gt: 0 } } });
-  const openTransfers = await prisma.conversation.count({ where: { organizationId, currentFlowNodeId: "transferred", status: "open", assignedToId: null } });
-
-  // 2. Fetch Message Volume (Last 7 Days)
+  // 1. Fetch High-Level Metrics and Chart Data concurrently
   const sevenDaysAgo = subDays(new Date(), 7);
-  
-  // We'll get all messages from the last 7 days for this org
-  const recentMessages = await prisma.message.findMany({
-    where: {
-      conversation: { organizationId },
-      createdAt: { gte: sevenDaysAgo }
-    },
-    select: {
-      direction: true,
-      createdAt: true
-    }
-  });
+
+  const [
+    totalConversations,
+    unreadConversations,
+    openTransfers,
+    recentMessages,
+    recentConversations
+  ] = await Promise.all([
+    prisma.conversation.count({ where: { organizationId } }),
+    prisma.conversation.count({ where: { organizationId, unreadCount: { gt: 0 } } }),
+    prisma.conversation.count({ where: { organizationId, currentFlowNodeId: "transferred", status: "open", assignedToId: null } }),
+    prisma.message.findMany({
+      where: {
+        conversation: { organizationId },
+        createdAt: { gte: sevenDaysAgo }
+      },
+      select: { direction: true, createdAt: true }
+    }),
+    prisma.conversation.findMany({
+      where: { organizationId, unreadCount: { gt: 0 } },
+      orderBy: { lastMessageAt: "desc" },
+      take: 5
+    })
+  ]);
 
   // Process messages into a day-by-day array
   const volumeMap: Record<string, { date: string; Inbound: number; Outbound: number }> = {};
@@ -53,13 +60,6 @@ export default async function DashboardPage() {
   }
 
   const lineChartData = Object.values(volumeMap);
-
-  // 4. Recent Incoming Messages
-  const recentConversations = await prisma.conversation.findMany({
-    where: { organizationId, unreadCount: { gt: 0 } },
-    orderBy: { lastMessageAt: "desc" },
-    take: 5
-  });
 
   return (
     <div className="flex-1 space-y-6 max-w-6xl mx-auto w-full p-4">

@@ -14,7 +14,12 @@ const globalForPrisma = globalThis as unknown as {
 // Next.js edge runtime / build might evaluate this file without DATABASE_URL
 const connectionString = process.env.DATABASE_URL || "postgresql://dummy:dummy@localhost/dummy";
 
-const pool = new Pool({ connectionString });
+const pool = new Pool({ 
+  connectionString,
+  max: 2, // Limit concurrent connections per Vercel container to prevent connection exhaustion
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
 const adapter = new PrismaPg(pool);
 const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
