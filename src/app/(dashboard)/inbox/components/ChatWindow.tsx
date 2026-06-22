@@ -11,6 +11,7 @@ import { getMessages, resolveConversation, markAsRead } from "@/lib/supabase/inb
 import { supabase } from "@/lib/supabase";
 import type { Conversation, Message } from "@prisma/client";
 import { toast } from "sonner";
+import { maskPhone } from "@/lib/phone";
 
 interface ChatWindowProps {
   conversation: Conversation | null;
@@ -250,7 +251,9 @@ export function ChatWindow({ conversation, orgSettings = {} }: ChatWindowProps) 
           </Avatar>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold">{conversation.contactName || conversation.phoneNumber}</h2>
+              <h2 className="text-sm font-semibold">
+                {conversation.contactName || (orgSettings.maskPhoneNumbers ? maskPhone(conversation.phoneNumber) : conversation.phoneNumber)}
+              </h2>
               {conversation.status === "resolved" ? (
                 <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-medium bg-muted text-muted-foreground">Resolved</Badge>
               ) : (
@@ -258,7 +261,9 @@ export function ChatWindow({ conversation, orgSettings = {} }: ChatWindowProps) 
               )}
             </div>
             {conversation.contactName && (
-              <p className="text-xs text-muted-foreground">{conversation.phoneNumber}</p>
+              <p className="text-xs text-muted-foreground">
+                {orgSettings.maskPhoneNumbers ? maskPhone(conversation.phoneNumber) : conversation.phoneNumber}
+              </p>
             )}
           </div>
         </div>
