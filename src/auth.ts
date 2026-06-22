@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
+import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 // In a real app you'd want a singleton pattern for PrismaClient
 // to avoid exhausting DB connections during hot reloads...
@@ -9,9 +11,22 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  datasourceUrl: process.env.DATABASE_URL || "postgresql://dummy:dummy@localhost/dummy",
+const connectionString = process.env.DATABASE_URL || "postgresql://dummy:dummy@localhost/dummy";
+
+const pool = new Pool({ 
+  connectionString,
+  max: 3, 
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+  keepAlive: true,
 });
+
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+});
+
+const adapter = new PrismaPg(pool);
+const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
