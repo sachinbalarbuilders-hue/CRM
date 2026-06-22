@@ -61,7 +61,7 @@ export function ContactActions({ contact }: ContactActionsProps) {
   return (
     <>
       <div className="flex justify-end items-center gap-2">
-        <Link href={`/inbox`}>
+        <Link href={`/inbox?chat=${contact.id}`}>
           <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-1">
             <MessageSquare className="h-4 w-4" /> Message
           </Button>
