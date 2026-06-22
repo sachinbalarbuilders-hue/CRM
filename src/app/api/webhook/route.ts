@@ -43,10 +43,38 @@ export async function POST(request: Request) {
     }
 
     const rawBody = await request.text();
-    const appSecret = process.env.META_APP_SECRET;
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (e) {
+      console.error("Failed to parse webhook JSON");
+      return new NextResponse("Bad Request", { status: 400 });
+    }
+
+    // Extract phone_number_id to find the correct App Secret
+    let wabaPhoneId = null;
+    if (body.object === "whatsapp_business_account" && body.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id) {
+      wabaPhoneId = body.entry[0].changes[0].value.metadata.phone_number_id;
+    }
+
+    if (!wabaPhoneId) {
+      console.error("Missing phone_number_id in webhook payload");
+      return new NextResponse("Bad Request", { status: 400 });
+    }
+
+    const account = await prisma.whatsAppAccount.findFirst({
+      where: { phoneNumberId: wabaPhoneId },
+    });
+
+    if (!account) {
+      console.error("No WhatsApp account found for phone_number_id:", wabaPhoneId);
+      return new NextResponse("Not Found", { status: 404 });
+    }
+
+    const appSecret = account.appSecret || process.env.META_APP_SECRET;
     
     if (!appSecret) {
-      console.error("META_APP_SECRET is not configured");
+      console.error("App Secret is not configured for account:", account.name);
       return new NextResponse("Internal Server Error", { status: 500 });
     }
 
@@ -59,8 +87,6 @@ export async function POST(request: Request) {
       console.error("Invalid Webhook Signature");
       return new NextResponse("Forbidden", { status: 403 });
     }
-
-    const body = JSON.parse(rawBody);
     
     // Meta wraps events in 'entry' arrays
     if (body.object === "whatsapp_business_account" && body.entry) {
@@ -68,15 +94,11 @@ export async function POST(request: Request) {
         for (const change of entry.changes) {
           if (change.field === "messages" && change.value.messages) {
             const value = change.value;
-            const wabaPhoneId = value.metadata.phone_number_id;
+            const wabaPhoneIdFromMsg = value.metadata?.phone_number_id;
             
-            // Find the WhatsApp account to get the organizationId
-            const account = await prisma.whatsAppAccount.findFirst({
-              where: { phoneNumberId: wabaPhoneId },
-            });
-
-            if (!account) {
-              console.error("No WhatsApp account found for phone_number_id:", wabaPhoneId);
+            // We already looked up the account above to verify signature
+            if (account.phoneNumberId !== wabaPhoneIdFromMsg) {
+              console.error("Account mismatch in entry");
               continue;
             }
 
