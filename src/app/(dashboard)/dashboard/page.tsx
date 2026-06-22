@@ -17,15 +17,9 @@ export default async function DashboardPage() {
   }
 
   // 1. Fetch High-Level Metrics
-  const [
-    totalConversations,
-    unreadConversations,
-    openTransfers
-  ] = await Promise.all([
-    prisma.conversation.count({ where: { organizationId } }),
-    prisma.conversation.count({ where: { organizationId, unreadCount: { gt: 0 } } }),
-    prisma.conversation.count({ where: { organizationId, currentFlowNodeId: "transferred", status: "open", assignedToId: null } })
-  ]);
+  const totalConversations = await prisma.conversation.count({ where: { organizationId } });
+  const unreadConversations = await prisma.conversation.count({ where: { organizationId, unreadCount: { gt: 0 } } });
+  const openTransfers = await prisma.conversation.count({ where: { organizationId, currentFlowNodeId: "transferred", status: "open", assignedToId: null } });
 
   // 2. Fetch Message Volume (Last 7 Days)
   const sevenDaysAgo = subDays(new Date(), 7);
