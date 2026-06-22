@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/auth";
 import { auth } from "@/auth";
+import { assertPermission } from "@/lib/permissions";
 
 export async function POST(req: Request) {
   try {
+    await assertPermission("inbox", "create");
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,7 +19,10 @@ export async function POST(req: Request) {
 
     // Verify conversation access
     const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId }
+      where: { 
+        id: conversationId,
+        organizationId: session.user.organizationId 
+      }
     });
 
     if (!conversation) {

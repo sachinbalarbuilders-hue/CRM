@@ -98,7 +98,7 @@ export function NewTemplateClient({
       .replace(/\*([^\*]+)\*/g, "<strong>$1</strong>")
       .replace(/_([^_]+)_/g, "<em>$1</em>")
       .replace(/~([^~]+)~/g, "<del>$1</del>")
-      .replace(/```(.*?)```/gs, "<code class='bg-gray-100 p-1 rounded'>$1</code>");
+      .replace(/```([\s\S]*?)```/g, "<code class='bg-gray-100 p-1 rounded'>$1</code>");
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   };
 

@@ -3,6 +3,7 @@
 import { prisma, auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { assertPermission } from "@/lib/permissions";
 import type { PermissionsMap } from "./role-constants";
 
 async function getActiveOrgId() {
@@ -14,26 +15,12 @@ async function getActiveOrgId() {
   return { userId: session.user.id, organizationId: activeOrg };
 }
 
-async function assertAdmin(userId: string, organizationId: string) {
-  const [membership, user] = await Promise.all([
-    prisma.organizationMember.findUnique({
-      where: { userId_organizationId: { userId, organizationId } },
-      include: { customRole: true }
-    }),
-    prisma.user.findUnique({ where: { id: userId } })
-  ]);
-
-  const isAdmin =
-    user?.role === "SUPER_ADMIN" ||
-    user?.role === "ORG_ADMIN" ||
-    membership?.role === "ORG_ADMIN";
-
-  if (!isAdmin) {
-    throw new Error("Only organization admins can manage roles");
-  }
+async function assertRoleManager(action: "view" | "create" | "edit" | "delete") {
+  await assertPermission("settings-roles", action);
 }
 
 export async function getRoles() {
+  await assertRoleManager("view");
   const { organizationId } = await getActiveOrgId();
 
   const roles = await prisma.customRole.findMany({
@@ -48,8 +35,8 @@ export async function getRoles() {
 }
 
 export async function createRole(name: string, permissions: PermissionsMap) {
+  await assertRoleManager("create");
   const { userId, organizationId } = await getActiveOrgId();
-  await assertAdmin(userId, organizationId);
 
   const role = await prisma.customRole.create({
     data: {
@@ -64,8 +51,8 @@ export async function createRole(name: string, permissions: PermissionsMap) {
 }
 
 export async function updateRole(roleId: string, name: string, permissions: PermissionsMap) {
+  await assertRoleManager("edit");
   const { userId, organizationId } = await getActiveOrgId();
-  await assertAdmin(userId, organizationId);
 
   const existing = await prisma.customRole.findFirst({
     where: { id: roleId, organizationId }
@@ -82,8 +69,8 @@ export async function updateRole(roleId: string, name: string, permissions: Perm
 }
 
 export async function deleteRole(roleId: string) {
+  await assertRoleManager("delete");
   const { userId, organizationId } = await getActiveOrgId();
-  await assertAdmin(userId, organizationId);
 
   const existing = await prisma.customRole.findFirst({
     where: { id: roleId, organizationId }

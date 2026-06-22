@@ -4,6 +4,7 @@ import { prisma } from "@/auth";
 import { auth } from "@/auth";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { assertPermission } from "@/lib/permissions";
 
 async function verifyAccess(conversationId: string) {
   const session = await auth();
@@ -26,6 +27,7 @@ async function verifyAccess(conversationId: string) {
 }
 
 export async function updateContact(id: string, contactName: string, phoneNumber: string) {
+  await assertPermission("contacts", "edit");
   await verifyAccess(id);
 
   await prisma.conversation.update({
@@ -38,6 +40,7 @@ export async function updateContact(id: string, contactName: string, phoneNumber
 }
 
 export async function deleteContact(id: string) {
+  await assertPermission("contacts", "delete");
   await verifyAccess(id);
 
   // Prisma will cascade delete messages if schema is set up for it, 

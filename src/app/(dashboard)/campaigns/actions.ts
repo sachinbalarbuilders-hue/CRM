@@ -1,12 +1,17 @@
 "use server";
 
-import { prisma } from "@/auth";
+import { prisma, auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { v4 as uuidv4 } from "uuid";
+import { assertPermission } from "@/lib/permissions";
 
 export async function uploadCampaignMedia(formData: FormData) {
   try {
+    await assertPermission("campaigns", "create");
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
     const file = formData.get("file") as File;
     if (!file) throw new Error("No file provided");
 
@@ -16,14 +21,14 @@ export async function uploadCampaignMedia(formData: FormData) {
     // Ensure bucket exists
     try {
       await supabaseAdmin.storage.createBucket("campaign-media", { public: true });
-    } catch (e) {
+    } catch {
       // Ignore bucket exists error
     }
 
     const fileExt = file.name.split('.').pop();
     const fileName = `${uuidv4()}.${fileExt}`;
 
-    const { data, error } = await supabaseAdmin.storage
+    const { error } = await supabaseAdmin.storage
       .from("campaign-media")
       .upload(fileName, buffer, {
         contentType: file.type,
@@ -44,6 +49,10 @@ export async function uploadCampaignMedia(formData: FormData) {
 
 export async function getCampaigns(organizationId: string) {
   try {
+    await assertPermission("campaigns", "view");
+    const session = await auth();
+    if (!session?.user || session.user.organizationId !== organizationId) throw new Error("Unauthorized");
+
     const campaigns = await prisma.campaign.findMany({
       where: { organizationId },
       orderBy: { createdAt: "desc" },
@@ -57,8 +66,12 @@ export async function getCampaigns(organizationId: string) {
 
 export async function getCampaign(id: string) {
   try {
+    await assertPermission("campaigns", "view");
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
     const campaign = await prisma.campaign.findUnique({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
     });
     return campaign;
   } catch (error) {
@@ -82,6 +95,10 @@ export async function createCampaign(data: {
   mediaUrl?: string;
 }) {
   try {
+    await assertPermission("campaigns", "create");
+    const session = await auth();
+    if (!session?.user || session.user.organizationId !== data.organizationId) throw new Error("Unauthorized");
+
     const campaign = await prisma.campaign.create({
       data: {
         name: data.name,
@@ -95,7 +112,6 @@ export async function createCampaign(data: {
         status: data.status || "Draft",
         organizationId: data.organizationId,
         whatsAppAccountId: data.whatsAppAccountId,
-        mediaUrl: data.mediaUrl,
         sentAt: data.status === "Active" ? new Date() : null,
       },
     });
@@ -126,8 +142,12 @@ export async function updateCampaign(id: string, data: {
   mediaUrl?: string;
 }) {
   try {
+    await assertPermission("campaigns", "edit");
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
     const campaign = await prisma.campaign.update({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
       data: {
         name: data.name,
         description: data.description,
@@ -139,7 +159,6 @@ export async function updateCampaign(id: string, data: {
         audienceCount: data.audienceCount,
         status: data.status || "Draft",
         whatsAppAccountId: data.whatsAppAccountId,
-        mediaUrl: data.mediaUrl,
         sentAt: data.status === "Active" ? new Date() : undefined,
       },
     });
@@ -182,7 +201,7 @@ async function processCampaignInBackground(campaignId: string) {
       const results = await Promise.allSettled(chunk.map(async (phone) => {
         if (hitRateLimit) throw new Error("Rate limit hit");
         
-        let components: any[] = [];
+        const components: Record<string, unknown>[] = [];
         
         // Handle Variable Mapping
         const tpl = await prisma.template.findFirst({
@@ -218,7 +237,7 @@ async function processCampaignInBackground(campaignId: string) {
         }
         
         if (tpl?.headerType && ["image", "video", "document"].includes(tpl.headerType.toLowerCase()) && tpl.headerContent) {
-           const finalMediaUrl = campaign.mediaUrl || tpl.headerContent;
+           const finalMediaUrl = tpl.headerContent;
            const mediaTypeLower = tpl.headerType.toLowerCase();
            logMediaType = mediaTypeLower;
            logMediaUrl = finalMediaUrl;
@@ -250,9 +269,10 @@ async function processCampaignInBackground(campaignId: string) {
             whatsAppAccountId: campaign.whatsAppAccountId || undefined
           });
           return true;
-        } catch (err: any) {
-          console.error(`Failed to send to ${phone}:`, err);
-          if (err.message && (err.message.includes("[131048]") || err.message.includes("[130429]"))) {
+        } catch (err: unknown) {
+          const error = err as Error;
+          console.error(`Failed to send to ${phone}:`, error);
+          if (error.message && (error.message.includes("[131048]") || error.message.includes("[130429]"))) {
              hitRateLimit = true;
           }
           throw err;
@@ -288,7 +308,7 @@ async function processCampaignInBackground(campaignId: string) {
 
     try {
       revalidatePath("/campaigns");
-    } catch (e) {
+    } catch {
       // Ignore if revalidatePath fails in background context
     }
 
@@ -299,8 +319,12 @@ async function processCampaignInBackground(campaignId: string) {
 
 export async function launchCampaign(id: string) {
   try {
+    await assertPermission("campaigns", "edit");
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
     const campaignData = await prisma.campaign.findUnique({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
       select: { audienceCount: true }
     });
     
@@ -330,8 +354,12 @@ export async function launchCampaign(id: string) {
 
 export async function deleteCampaign(id: string) {
   try {
+    await assertPermission("campaigns", "delete");
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
     await prisma.campaign.delete({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
     });
     
     revalidatePath("/campaigns");

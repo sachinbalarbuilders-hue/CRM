@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,20 @@ export function LoginForm({
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
+
+  useEffect(() => {
+    // Load saved credentials on mount
+    const savedEmail = localStorage.getItem("crm_remembered_email");
+    const savedPassword = localStorage.getItem("crm_remembered_password");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      if (savedPassword) setPassword(savedPassword);
+    }
+  }, []);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,6 +60,13 @@ export function LoginForm({
         setError("Invalid email or password");
         setIsLoading(false);
       } else {
+        if (rememberMe) {
+          localStorage.setItem("crm_remembered_email", email);
+          localStorage.setItem("crm_remembered_password", password);
+        } else {
+          localStorage.removeItem("crm_remembered_email");
+          localStorage.removeItem("crm_remembered_password");
+        }
         router.push(callbackUrl);
         router.refresh();
       }
@@ -80,6 +101,8 @@ export function LoginForm({
                     name="email"
                     type="email"
                     placeholder="m@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
                     disabled={isLoading}
                   />
@@ -98,9 +121,23 @@ export function LoginForm({
                     id="password" 
                     name="password" 
                     type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     required 
                     disabled={isLoading} 
                   />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="remember"
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
+                  <Label htmlFor="remember" className="text-sm font-medium leading-none cursor-pointer">
+                    Remember me
+                  </Label>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Logging in..." : "Login"}

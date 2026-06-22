@@ -4,6 +4,7 @@ import { prisma } from "@/auth";
 import { auth } from "@/auth";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { assertPermission } from "@/lib/permissions";
 
 export async function updateOrganizationSettings(data: {
   name?: string;
@@ -23,14 +24,8 @@ export async function updateOrganizationSettings(data: {
     throw new Error("Unauthorized");
   }
 
-  // Verify org admin
-  const membership = await prisma.organizationMember.findUnique({
-    where: { userId_organizationId: { userId: session.user.id, organizationId } }
-  });
-  
-  if (session.user.role !== "SUPER_ADMIN" && (!membership || membership.role !== "ORG_ADMIN")) {
-    throw new Error("You must be an Organization Admin to update settings");
-  }
+  // Verify permission
+  await assertPermission("settings-general", "edit");
 
   const org = await prisma.organization.findUnique({ where: { id: organizationId } });
   if (!org) throw new Error("Organization not found");

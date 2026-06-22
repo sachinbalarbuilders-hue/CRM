@@ -36,7 +36,31 @@ export async function GET(request: Request) {
 // Meta Webhook Event Processing
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const signature = request.headers.get("x-hub-signature-256");
+    if (!signature) {
+      console.error("Missing X-Hub-Signature-256 header");
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+
+    const rawBody = await request.text();
+    const appSecret = process.env.META_APP_SECRET;
+    
+    if (!appSecret) {
+      console.error("META_APP_SECRET is not configured");
+      return new NextResponse("Internal Server Error", { status: 500 });
+    }
+
+    // Verify signature
+    const crypto = await import("crypto");
+    const hmac = crypto.createHmac("sha256", appSecret);
+    const expectedSignature = `sha256=${hmac.update(rawBody).digest("hex")}`;
+
+    if (signature !== expectedSignature) {
+      console.error("Invalid Webhook Signature");
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+
+    const body = JSON.parse(rawBody);
     
     // Meta wraps events in 'entry' arrays
     if (body.object === "whatsapp_business_account" && body.entry) {

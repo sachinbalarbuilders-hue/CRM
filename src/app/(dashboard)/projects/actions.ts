@@ -1,8 +1,9 @@
 "use server";
 
-import { prisma } from "@/auth";
+import { prisma, auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import { assertPermission } from "@/lib/permissions";
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || "";
@@ -11,6 +12,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function uploadBrochure(formData: FormData) {
   try {
+    await assertPermission("projects", "create");
+    const session = await auth();
+    if (!session?.user) return { success: false, error: "Unauthorized" };
+
     const file = formData.get("file") as File;
     if (!file) return { success: false, error: "No file provided" };
 
@@ -58,6 +63,12 @@ export async function createProject(data: {
   status?: string;
 }) {
   try {
+    await assertPermission("projects", "create");
+    const session = await auth();
+    if (!session?.user || session.user.organizationId !== data.organizationId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
     const project = await prisma.project.create({
       data: {
         name: data.name,
@@ -90,8 +101,12 @@ export async function updateProject(id: string, data: {
   status?: string;
 }) {
   try {
+    await assertPermission("projects", "edit");
+    const session = await auth();
+    if (!session?.user) return { success: false, error: "Unauthorized" };
+
     const project = await prisma.project.update({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
       data,
     });
     revalidatePath("/projects");
@@ -104,8 +119,12 @@ export async function updateProject(id: string, data: {
 
 export async function deleteProject(id: string) {
   try {
+    await assertPermission("projects", "delete");
+    const session = await auth();
+    if (!session?.user) return { success: false, error: "Unauthorized" };
+
     await prisma.project.delete({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
     });
     revalidatePath("/projects");
     return { success: true };

@@ -3,7 +3,7 @@
 
 export const SECTIONS_LIST = [
   "dashboard", "inbox", "campaigns", "templates",
-  "flows", "leads", "projects", "contacts", "accounts", "settings"
+  "flows", "transfers", "projects", "contacts", "accounts", "settings-general", "settings-roles", "settings-users", "meta-insights"
 ] as const;
 
 export const SECTION_LABELS: Record<string, string> = {
@@ -12,11 +12,14 @@ export const SECTION_LABELS: Record<string, string> = {
   campaigns: "Campaigns",
   templates: "Templates",
   flows: "Flows",
-  leads: "Leads",
+  transfers: "Transfers",
   projects: "Projects",
   contacts: "Contacts",
   accounts: "Accounts",
-  settings: "Settings",
+  "settings-general": "Settings - General",
+  "settings-roles": "Settings - Roles",
+  "settings-users": "Settings - Users",
+  "meta-insights": "Meta Insights",
 };
 
 export type Permission = {

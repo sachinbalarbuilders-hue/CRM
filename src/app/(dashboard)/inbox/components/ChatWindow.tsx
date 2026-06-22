@@ -14,7 +14,7 @@ import { toast } from "sonner";
 
 interface ChatWindowProps {
   conversation: Conversation | null;
-  orgSettings?: Record<string, any>;
+  orgSettings?: Record<string, unknown>;
 }
 
 export function ChatWindow({ conversation, orgSettings = {} }: ChatWindowProps) {
@@ -35,6 +35,7 @@ export function ChatWindow({ conversation, orgSettings = {} }: ChatWindowProps) 
   // Fetch messages when conversation changes
   useEffect(() => {
     if (!conversation) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages([]);
       prevConvIdRef.current = null;
       return;
@@ -172,6 +173,7 @@ export function ChatWindow({ conversation, orgSettings = {} }: ChatWindowProps) 
       mediaUrl: mediaData?.mediaUrl || null,
       mediaName: mediaData?.mediaName || null,
       waMessageId: null,
+      campaignId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -193,7 +195,7 @@ export function ChatWindow({ conversation, orgSettings = {} }: ChatWindowProps) 
 
       if (!response.ok) throw new Error("Failed to send");
       // The real-time subscription will update the message status
-    } catch (error) {
+    } catch {
       toast.error("Failed to send message");
       setMessages(prev => prev.map(m => 
         m.id === tempId ? { ...m, status: "failed" } : m
@@ -207,7 +209,7 @@ export function ChatWindow({ conversation, orgSettings = {} }: ChatWindowProps) 
     try {
       await resolveConversation(conversation.id);
       toast.success("Conversation resolved");
-    } catch (error) {
+    } catch {
       toast.error("Failed to resolve conversation");
     } finally {
       setIsResolving(false);

@@ -49,7 +49,7 @@ import { Input } from "@/components/ui/input";
 const navMain = [
   { name: "Dashboard", href: "/dashboard", icon: Home, section: "dashboard" },
   { name: "Chat", href: "/inbox", icon: Inbox, section: "inbox" },
-  { name: "Projects", href: "/projects", icon: Briefcase, section: "dashboard" },
+  { name: "Projects", href: "/projects", icon: Briefcase, section: "projects" },
 ];
 
 const navMessaging = [
@@ -59,7 +59,7 @@ const navMessaging = [
     section: "chatbot",
     items: [
       { name: "Flows", href: "/flow-builder", section: "flows" },
-      { name: "Transfers", href: "/transfers", section: "inbox" }
+      { name: "Transfers", href: "/transfers", section: "transfers" }
     ]
   },
   { name: "Campaigns", href: "/campaigns", icon: Megaphone, section: "campaigns" },
@@ -72,10 +72,10 @@ const navSettings = [
     name: "Settings", 
     icon: Settings,
     items: [
-      { name: "General", href: "/settings/general", section: "settings" },
+      { name: "General", href: "/settings/general", section: "settings-general" },
       { name: "Accounts", href: "/settings/accounts", section: "accounts" },
-      { name: "Roles", href: "/settings/roles", section: "settings" },
-      { name: "Users", href: "/settings/users", section: "settings" },
+      { name: "Roles", href: "/settings/roles", section: "settings-roles" },
+      { name: "Users", href: "/settings/users", section: "settings-users" },
       { name: "Contacts", href: "/settings/contacts", section: "contacts" },
     ]
   }

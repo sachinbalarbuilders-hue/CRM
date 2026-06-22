@@ -1,10 +1,15 @@
 "use server";
 
-import { prisma } from "@/auth";
+import { prisma, auth } from "@/auth";
 import { revalidatePath } from "next/cache";
+import { assertPermission } from "@/lib/permissions";
 
 export async function getTemplates(organizationId: string) {
   try {
+    await assertPermission("templates", "view");
+    const session = await auth();
+    if (!session?.user || session.user.organizationId !== organizationId) throw new Error("Unauthorized");
+
     const templates = await prisma.template.findMany({
       where: { organizationId },
       orderBy: { updatedAt: "desc" },
@@ -18,8 +23,12 @@ export async function getTemplates(organizationId: string) {
 
 export async function getTemplate(id: string) {
   try {
+    await assertPermission("templates", "view");
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
     const template = await prisma.template.findUnique({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
     });
     return template;
   } catch (error) {
@@ -30,6 +39,11 @@ export async function getTemplate(id: string) {
 
 export async function createTemplate(formData: FormData) {
   try {
+    await assertPermission("templates", "create");
+    const session = await auth();
+    const organizationId = formData.get("organizationId") as string;
+    if (!session?.user || session.user.organizationId !== organizationId) throw new Error("Unauthorized");
+
     const name = formData.get("name") as string;
     const category = formData.get("category") as string;
     const language = formData.get("language") as string;
@@ -38,7 +52,6 @@ export async function createTemplate(formData: FormData) {
     const bodyContent = formData.get("bodyContent") as string;
     const footerContent = formData.get("footerContent") as string | undefined;
     const status = formData.get("status") as string;
-    const organizationId = formData.get("organizationId") as string;
     const whatsAppAccountId = formData.get("whatsAppAccountId") as string;
     const file = formData.get("file") as File | null;
 
@@ -171,6 +184,10 @@ export async function createTemplate(formData: FormData) {
 
 export async function updateTemplate(id: string, formData: FormData) {
   try {
+    await assertPermission("templates", "edit");
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
     const name = formData.get("name") as string;
     const category = formData.get("category") as string;
     const language = formData.get("language") as string;
@@ -181,7 +198,7 @@ export async function updateTemplate(id: string, formData: FormData) {
     const whatsAppAccountId = formData.get("whatsAppAccountId") as string;
     const file = formData.get("file") as File | null;
 
-    const existing = await prisma.template.findUnique({ where: { id } });
+    const existing = await prisma.template.findUnique({ where: { id, organizationId: session.user.organizationId } });
     if (!existing) throw new Error("Template not found in database.");
 
     // If an account ID was passed, use it, otherwise fall back to the existing one
@@ -276,7 +293,7 @@ export async function updateTemplate(id: string, formData: FormData) {
 
     // Step 4: Update Database
     const template = await prisma.template.update({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
       data: {
         category,
         headerType,
@@ -298,8 +315,12 @@ export async function updateTemplate(id: string, formData: FormData) {
 
 export async function deleteTemplate(id: string) {
   try {
+    await assertPermission("templates", "delete");
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
     const template = await prisma.template.findUnique({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
     });
 
     if (!template) throw new Error("Template not found");
@@ -328,7 +349,7 @@ export async function deleteTemplate(id: string) {
     }
 
     await prisma.template.delete({
-      where: { id },
+      where: { id, organizationId: session.user.organizationId },
     });
     
     revalidatePath("/templates");
@@ -340,8 +361,12 @@ export async function deleteTemplate(id: string) {
 
 export async function syncTemplatesFromMeta(whatsAppAccountId: string) {
   try {
+    await assertPermission("templates", "create");
+    const session = await auth();
+    if (!session?.user) throw new Error("Unauthorized");
+
     const account = await prisma.whatsAppAccount.findUnique({
-      where: { id: whatsAppAccountId }
+      where: { id: whatsAppAccountId, organizationId: session.user.organizationId }
     });
 
     if (!account) {

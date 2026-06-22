@@ -1,8 +1,10 @@
 "use server";
 
 import { prisma, auth } from "@/auth";
+import { assertPermission } from "@/lib/permissions";
 
 export async function assignConversationToMe(conversationId: string) {
+  await assertPermission("transfers", "edit");
   const session = await auth();
   if (!session?.user?.id) {
     return { success: false, error: "Not authenticated" };

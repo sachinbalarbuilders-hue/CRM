@@ -4,6 +4,7 @@ import { prisma, auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
+import { assertPermission } from "@/lib/permissions";
 
 async function getActiveOrgId() {
   const session = await auth();
@@ -14,25 +15,12 @@ async function getActiveOrgId() {
   return { userId: session.user.id, organizationId: activeOrg };
 }
 
-async function assertAdmin(userId: string, organizationId: string) {
-  const [membership, user] = await Promise.all([
-    prisma.organizationMember.findUnique({
-      where: { userId_organizationId: { userId, organizationId } }
-    }),
-    prisma.user.findUnique({ where: { id: userId } })
-  ]);
-
-  const isAdmin =
-    user?.role === "SUPER_ADMIN" ||
-    user?.role === "ORG_ADMIN" ||
-    membership?.role === "ORG_ADMIN";
-
-  if (!isAdmin) {
-    throw new Error("Only organization admins can manage users");
-  }
+async function assertUserManager(action: "view" | "create" | "edit" | "delete") {
+  await assertPermission("settings-users", action);
 }
 
 export async function getOrgMembers() {
+  await assertUserManager("view");
   const { organizationId } = await getActiveOrgId();
 
   const members = await prisma.organizationMember.findMany({
@@ -53,8 +41,8 @@ export async function inviteUser(
   password: string,
   customRoleId: string | null
 ) {
+  await assertUserManager("create");
   const { userId, organizationId } = await getActiveOrgId();
-  await assertAdmin(userId, organizationId);
 
   // Check if user already exists
   let user = await prisma.user.findUnique({ where: { email } });
@@ -97,8 +85,8 @@ export async function inviteUser(
 }
 
 export async function updateMemberRole(memberId: string, customRoleId: string | null) {
+  await assertUserManager("edit");
   const { userId, organizationId } = await getActiveOrgId();
-  await assertAdmin(userId, organizationId);
 
   // Verify member belongs to this org
   const member = await prisma.organizationMember.findFirst({
@@ -116,8 +104,8 @@ export async function updateMemberRole(memberId: string, customRoleId: string | 
 }
 
 export async function removeMember(memberId: string) {
+  await assertUserManager("delete");
   const { userId, organizationId } = await getActiveOrgId();
-  await assertAdmin(userId, organizationId);
 
   const member = await prisma.organizationMember.findFirst({
     where: { id: memberId, organizationId }

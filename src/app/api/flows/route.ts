@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma, auth } from "@/auth";
+import { assertPermission } from "@/lib/permissions";
 
 export async function POST(request: Request) {
   try {
+    await assertPermission("flows", "edit");
     const session = await auth();
     const organizationId = session?.user?.organizationId;
 

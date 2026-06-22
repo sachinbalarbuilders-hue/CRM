@@ -5,6 +5,11 @@ import { processFlow } from "@/lib/flowEngine";
 // You can trigger this endpoint via Vercel Cron, Supabase Cron, or any external ping service
 export async function GET(request: Request) {
   try {
+    const authHeader = request.headers.get("authorization");
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     // 1. Find all conversations currently waiting in a flow
     const waitingConversations = await prisma.conversation.findMany({
       where: {

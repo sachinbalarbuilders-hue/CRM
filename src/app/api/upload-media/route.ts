@@ -16,6 +16,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
+    const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB limit
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: "File exceeds 16MB limit" }, { status: 400 });
+    }
+
+    const allowedMimeTypes = [
+      "image/jpeg", "image/png", "image/webp",
+      "video/mp4", "video/3gpp",
+      "audio/aac", "audio/mp4", "audio/mpeg", "audio/amr", "audio/ogg",
+      "application/pdf", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ];
+
+    if (!allowedMimeTypes.includes(file.type)) {
+      return NextResponse.json({ error: "Invalid file type. Uploads are restricted to images, videos, audio, and documents." }, { status: 400 });
+    }
+
     const fileBuffer = await file.arrayBuffer();
     const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '')}`;
     
