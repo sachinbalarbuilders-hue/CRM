@@ -50,5 +50,6 @@ export async function updateOrganizationSettings(data: {
     }
   });
 
-  revalidatePath("/settings/general");
+  // Revalidate the entire dashboard layout so global settings changes propagate to Inbox, Contacts, etc.
+  revalidatePath("/", "layout");
 }

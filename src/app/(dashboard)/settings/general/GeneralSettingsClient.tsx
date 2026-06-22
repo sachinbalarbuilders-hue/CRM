@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Globe, Settings, Bell, Loader2, Building2, Clock, Calendar, EyeOff, AlertTriangle, ChevronDown } from "lucide-react";
 import { updateOrganizationSettings } from "./actions";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import type { Organization } from "@prisma/client";
 
 interface GeneralSettingsClientProps {
@@ -66,6 +67,7 @@ function NativeSelect({
 }
 
 export function GeneralSettingsClient({ organization }: GeneralSettingsClientProps) {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"general" | "notifications">("general");
   const settings = (organization.settings as Record<string, any>) || {};
@@ -87,6 +89,7 @@ export function GeneralSettingsClient({ organization }: GeneralSettingsClientPro
         emailNotifications, newMessageAlerts, campaignUpdates,
       });
       toast.success("Settings saved");
+      router.refresh();
     } catch (error: any) {
       toast.error(error.message || "Failed to save settings");
     } finally {
