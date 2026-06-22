@@ -2,6 +2,45 @@
 
 import { prisma } from "@/auth";
 import { revalidatePath } from "next/cache";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { v4 as uuidv4 } from "uuid";
+
+export async function uploadCampaignMedia(formData: FormData) {
+  try {
+    const file = formData.get("file") as File;
+    if (!file) throw new Error("No file provided");
+
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    // Ensure bucket exists
+    try {
+      await supabaseAdmin.storage.createBucket("campaign-media", { public: true });
+    } catch (e) {
+      // Ignore bucket exists error
+    }
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${uuidv4()}.${fileExt}`;
+
+    const { data, error } = await supabaseAdmin.storage
+      .from("campaign-media")
+      .upload(fileName, buffer, {
+        contentType: file.type,
+      });
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabaseAdmin.storage
+      .from("campaign-media")
+      .getPublicUrl(fileName);
+
+    return { publicUrl };
+  } catch (error) {
+    console.error("Failed to upload campaign media:", error);
+    throw new Error("Failed to upload media");
+  }
+}
 
 export async function getCampaigns(organizationId: string) {
   try {
@@ -39,6 +78,8 @@ export async function createCampaign(data: {
   audienceCount: number;
   status?: string;
   organizationId: string;
+  whatsAppAccountId?: string;
+  mediaUrl?: string;
 }) {
   try {
     const campaign = await prisma.campaign.create({
@@ -53,6 +94,8 @@ export async function createCampaign(data: {
         audienceCount: data.audienceCount,
         status: data.status || "Draft",
         organizationId: data.organizationId,
+        whatsAppAccountId: data.whatsAppAccountId,
+        mediaUrl: data.mediaUrl,
         sentAt: data.status === "Active" ? new Date() : null,
       },
     });
@@ -79,6 +122,8 @@ export async function updateCampaign(id: string, data: {
   audienceList?: string[];
   audienceCount: number;
   status?: string;
+  whatsAppAccountId?: string;
+  mediaUrl?: string;
 }) {
   try {
     const campaign = await prisma.campaign.update({
@@ -93,6 +138,8 @@ export async function updateCampaign(id: string, data: {
         audienceList: data.audienceList,
         audienceCount: data.audienceCount,
         status: data.status || "Draft",
+        whatsAppAccountId: data.whatsAppAccountId,
+        mediaUrl: data.mediaUrl,
         sentAt: data.status === "Active" ? new Date() : undefined,
       },
     });
@@ -148,26 +195,45 @@ async function processCampaignInBackground(campaignId: string) {
 
         if (tpl?.bodyContent) {
            logBody = tpl.bodyContent;
-           if (campaign.variableMapping === "name" && tpl.bodyContent.includes("{{1}}")) {
-             const lead = await prisma.lead.findFirst({
-               where: { phone: { contains: phone }, organizationId: campaign.organizationId }
-             });
-             const firstName = lead?.name ? lead.name.split(' ')[0] : "there";
-             logBody = logBody.replace("{{1}}", firstName);
-             components = [
-               {
-                 type: "body",
-                 parameters: [
-                   { type: "text", text: firstName }
-                 ]
+           if (tpl.bodyContent.includes("{{1}}")) {
+             let firstName = "there"; // default fallback
+
+             if (campaign.variableMapping === "name") {
+               const lead = await prisma.lead.findFirst({
+                 where: { phone: { contains: phone }, organizationId: campaign.organizationId }
+               });
+               if (lead?.name) {
+                 firstName = lead.name.split(' ')[0];
                }
-             ];
+             }
+
+             logBody = logBody.replace("{{1}}", firstName);
+             components.push({
+               type: "body",
+               parameters: [
+                 { type: "text", text: firstName }
+               ]
+             });
            }
         }
         
-        if (tpl?.headerType && ["image", "video", "document"].includes(tpl.headerType) && tpl.headerContent) {
-           logMediaType = tpl.headerType;
-           logMediaUrl = tpl.headerContent;
+        if (tpl?.headerType && ["image", "video", "document"].includes(tpl.headerType.toLowerCase()) && tpl.headerContent) {
+           const finalMediaUrl = campaign.mediaUrl || tpl.headerContent;
+           const mediaTypeLower = tpl.headerType.toLowerCase();
+           logMediaType = mediaTypeLower;
+           logMediaUrl = finalMediaUrl;
+           
+           components.push({
+             type: "header",
+             parameters: [
+               {
+                 type: mediaTypeLower,
+                 [mediaTypeLower]: {
+                   link: finalMediaUrl
+                 }
+               }
+             ]
+           });
         }
 
         try {
@@ -180,7 +246,8 @@ async function processCampaignInBackground(campaignId: string) {
             bizOpaqueCallbackData: campaign.id,
             logBody,
             logMediaType,
-            logMediaUrl
+            logMediaUrl,
+            whatsAppAccountId: campaign.whatsAppAccountId || undefined
           });
           return true;
         } catch (err: any) {
@@ -232,6 +299,15 @@ async function processCampaignInBackground(campaignId: string) {
 
 export async function launchCampaign(id: string) {
   try {
+    const campaignData = await prisma.campaign.findUnique({
+      where: { id },
+      select: { audienceCount: true }
+    });
+    
+    if (!campaignData || campaignData.audienceCount === 0) {
+      throw new Error("Cannot launch a campaign with 0 recipients.");
+    }
+
     const campaign = await prisma.campaign.update({
       where: { id },
       data: {

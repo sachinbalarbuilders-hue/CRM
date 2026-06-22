@@ -25,6 +25,7 @@ import {
 import { deleteCampaign, launchCampaign } from "./actions";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useRouter } from "next/navigation";
 
 const statusConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
   Completed: {
@@ -51,7 +52,7 @@ const statusConfig: Record<string, { label: string; className: string; icon: Rea
 
 export function CampaignsClient({ campaigns }: { campaigns: any[] }) {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const router = useRouter();
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this campaign?")) return;
@@ -70,8 +71,8 @@ export function CampaignsClient({ campaigns }: { campaigns: any[] }) {
     try {
       await launchCampaign(id);
       toast.success("Campaign launched successfully");
-    } catch (error) {
-      toast.error("Failed to launch campaign");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to launch campaign");
     }
   };
 
@@ -134,14 +135,11 @@ export function CampaignsClient({ campaigns }: { campaigns: any[] }) {
               {campaigns.map((campaign) => {
                 const cfg = statusConfig[campaign.status] || statusConfig["Draft"];
                 const readRate = campaign.deliveredCount > 0 ? Math.round((campaign.readCount / campaign.deliveredCount) * 100) : 0;
-                const replyRate = campaign.deliveredCount > 0 ? Math.round((campaign.repliedCount / campaign.deliveredCount) * 100) : 0;
-                const isExpanded = expandedId === campaign.id;
-
                 return (
                   <React.Fragment key={campaign.id}>
                     <TableRow 
-                      className={`cursor-pointer transition-colors ${isExpanded ? "bg-muted/50" : "hover:bg-muted/50"}`}
-                      onClick={() => setExpandedId(isExpanded ? null : campaign.id)}
+                      className={`cursor-pointer transition-colors hover:bg-muted/50`}
+                      onClick={() => router.push(`/campaigns/${campaign.id}`)}
                     >
                       <TableCell className="font-medium">{campaign.name}</TableCell>
                       <TableCell>
@@ -167,24 +165,22 @@ export function CampaignsClient({ campaigns }: { campaigns: any[] }) {
                       <TableCell className="text-sm text-muted-foreground">
                         {campaign.sentAt ? format(new Date(campaign.sentAt), "MMM d, yyyy") : "—"}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-muted hover:text-accent-foreground h-8 w-8 focus-visible:outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                             {isDeleting === campaign.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <Link href={campaign.status === "Draft" ? `/campaigns/${campaign.id}/edit` : `/campaigns/${campaign.id}`}>
+                              <DropdownMenuItem className="cursor-pointer">
+                                {campaign.status === "Draft" ? <><Edit className="mr-2 h-4 w-4" /> Edit Draft</> : <><Eye className="mr-2 h-4 w-4" /> View Stats</>}
+                              </DropdownMenuItem>
+                            </Link>
                             {(campaign.status === "Draft" || campaign.status === "Paused (Rate Limit)") && (
                               <>
-                                {campaign.status === "Draft" && (
-                                  <Link href={`/campaigns/${campaign.id}/edit`}>
-                                    <DropdownMenuItem className="cursor-pointer">
-                                      <Edit className="mr-2 h-4 w-4" /> Edit Draft
-                                    </DropdownMenuItem>
-                                  </Link>
-                                )}
                                 <DropdownMenuItem 
-                                  className="cursor-pointer text-green-600 focus:text-green-600"
-                                  onClick={() => handleLaunch(campaign.id)}
+                                  className={`cursor-pointer focus:text-green-600 ${campaign.audienceCount === 0 ? "opacity-50 pointer-events-none text-muted-foreground" : "text-green-600"}`}
+                                  onClick={(e) => { e.stopPropagation(); handleLaunch(campaign.id); }}
                                 >
                                   <Send className="mr-2 h-4 w-4" /> {campaign.status === "Draft" ? "Launch Campaign" : "Resume Campaign"}
                                 </DropdownMenuItem>
@@ -201,34 +197,6 @@ export function CampaignsClient({ campaigns }: { campaigns: any[] }) {
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                    {isExpanded && (
-                      <TableRow className="bg-muted/20 hover:bg-muted/20">
-                        <TableCell colSpan={6} className="p-0 border-b">
-                          <div className="p-4 bg-muted/10 grid grid-cols-3 gap-4 border-t shadow-inner">
-                            <Card className="shadow-sm border-muted/50">
-                              <CardContent className="p-4">
-                                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Sent</p>
-                                <p className="text-2xl font-bold mt-1">{campaign.deliveredCount.toLocaleString()}</p>
-                              </CardContent>
-                            </Card>
-                            <Card className="shadow-sm border-muted/50">
-                              <CardContent className="p-4">
-                                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Read</p>
-                                <p className="text-2xl font-bold mt-1">{campaign.readCount.toLocaleString()}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{readRate}% read rate</p>
-                              </CardContent>
-                            </Card>
-                            <Card className="shadow-sm border-muted/50">
-                              <CardContent className="p-4">
-                                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Total Replied</p>
-                                <p className="text-2xl font-bold mt-1">{campaign.repliedCount.toLocaleString()}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{replyRate}% reply rate</p>
-                              </CardContent>
-                            </Card>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
                   </React.Fragment>
                 );
               })}

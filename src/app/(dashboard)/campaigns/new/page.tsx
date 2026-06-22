@@ -15,5 +15,10 @@ export default async function NewCampaignPage() {
     where: { organizationId, status: "Approved" }
   });
 
-  return <NewCampaignWizard organizationId={organizationId} templates={templates} />;
+  const accounts = await prisma.whatsAppAccount.findMany({
+    where: { organizationId },
+    select: { id: true, name: true, wabaId: true }
+  });
+
+  return <NewCampaignWizard organizationId={organizationId} templates={templates} accounts={accounts} />;
 }

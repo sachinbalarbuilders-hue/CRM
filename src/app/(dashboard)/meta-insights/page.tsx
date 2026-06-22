@@ -3,13 +3,15 @@ import { auth } from "@/auth";
 import { cookies } from "next/headers";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, XCircle, AlertCircle, Send, Check, CheckCheck } from "lucide-react";
-import { DashboardPieChart } from "../dashboard/components/DashboardCharts"; // We can reuse the chart component!
+import { DashboardPieChart } from "../dashboard/components/DashboardCharts";
 import { format, subDays } from "date-fns";
+import { AccountSelector } from "./AccountSelector";
 
-export default async function MetaInsightsPage() {
+export default async function MetaInsightsPage({ searchParams }: { searchParams: Promise<{ accountId?: string }> }) {
   const session = await auth();
   const cookieStore = await cookies();
   const organizationId = cookieStore.get("activeOrganizationId")?.value || session?.user?.organizationId;
+  const sp = await searchParams;
 
   if (!organizationId) {
     return <div className="p-4">Please select an organization to view insights.</div>;
@@ -20,31 +22,36 @@ export default async function MetaInsightsPage() {
     where: { organizationId }
   });
 
+  const selectedAccountId = sp.accountId || (waAccounts.length > 0 ? waAccounts[0].id : undefined);
+  const selectedAccount = waAccounts.find(a => a.id === selectedAccountId);
+
   // 2. Message Delivery Funnel (Outbound only)
+  // Filter messages that belong to campaigns from this specific WhatsApp Account
+  const messageWhereClause: any = { 
+    conversation: { organizationId },
+    direction: { in: ['outbound', 'OUTBOUND'] }
+  };
+  
+  if (selectedAccountId) {
+    messageWhereClause.campaign = { whatsAppAccountId: selectedAccountId };
+  }
+
   const outboundMessages = await prisma.message.groupBy({
     by: ['status'],
-    where: { 
-      conversation: { organizationId },
-      direction: 'OUTBOUND'
-    },
+    where: messageWhereClause,
     _count: { status: true }
   });
 
-  const funnelData = {
-    SENT: 0,
-    DELIVERED: 0,
-    READ: 0,
-    FAILED: 0
-  };
+  const funnelData = { SENT: 0, DELIVERED: 0, READ: 0, FAILED: 0 };
 
   outboundMessages.forEach(m => {
-    if (m.status === "SENT") funnelData.SENT += m._count.status;
-    if (m.status === "DELIVERED") funnelData.DELIVERED += m._count.status;
-    if (m.status === "READ") funnelData.READ += m._count.status;
-    if (m.status === "FAILED") funnelData.FAILED += m._count.status;
+    const status = m.status.toUpperCase();
+    if (status === "SENT") funnelData.SENT += m._count.status;
+    if (status === "DELIVERED") funnelData.DELIVERED += m._count.status;
+    if (status === "READ") funnelData.READ += m._count.status;
+    if (status === "FAILED") funnelData.FAILED += m._count.status;
   });
 
-  // Funnel logic: DELIVERED includes READ. SENT includes DELIVERED, READ, FAILED.
   const totalSent = funnelData.SENT + funnelData.DELIVERED + funnelData.READ + funnelData.FAILED;
   const totalDelivered = funnelData.DELIVERED + funnelData.READ;
   const totalRead = funnelData.READ;
@@ -53,40 +60,44 @@ export default async function MetaInsightsPage() {
   const readRate = totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : 0;
 
   // 3. Inbound vs Outbound Ratio
+  const directionWhereClause: any = { conversation: { organizationId } };
+  if (selectedAccountId) {
+    // Note: Since inbound messages aren't tied to campaigns, they won't have campaign.whatsAppAccountId.
+    // For now, if an account is selected, we only show ratio for messages tied to its campaigns 
+    // to keep the visual stats completely locked to the selected account's known traffic.
+    directionWhereClause.campaign = { whatsAppAccountId: selectedAccountId };
+  }
+
   const messageDirection = await prisma.message.groupBy({
     by: ['direction'],
-    where: { conversation: { organizationId } },
+    where: directionWhereClause,
     _count: { direction: true }
   });
 
-  // Group to ensure unique names
   const pieDataMap: Record<string, number> = {};
   messageDirection.forEach(d => {
+    const dir = d.direction.toUpperCase();
     let name = "Sent";
-    if (d.direction === "INBOUND") name = "Received";
-    else if (d.direction === "SYSTEM") name = "System";
-    else if (d.direction && d.direction !== "OUTBOUND") name = d.direction; // Catch any other edge cases
+    if (dir === "INBOUND") name = "Received";
+    else if (dir === "SYSTEM") name = "System";
+    else if (dir && dir !== "OUTBOUND") name = d.direction;
     
     pieDataMap[name] = (pieDataMap[name] || 0) + d._count.direction;
   });
 
   const pieData = Object.entries(pieDataMap).map(([name, value]) => ({ name, value }));
-
-  if (pieData.length === 0) {
-    pieData.push({ name: "No Data", value: 1 });
-  }
+  if (pieData.length === 0) pieData.push({ name: "No Data", value: 1 });
 
   // 4. Marketing Campaigns Cost
   const campaigns = await prisma.campaign.findMany({
     where: { 
       organizationId,
-      status: "Active"
+      status: "Active",
+      ...(selectedAccountId ? { whatsAppAccountId: selectedAccountId } : {})
     }
   });
 
-  const marketingCost = campaigns.reduce((acc, campaign) => {
-    return acc + (campaign.deliveredCount * 0.08);
-  }, 0);
+  const marketingCost = campaigns.reduce((acc, campaign) => acc + (campaign.deliveredCount * 0.08), 0);
 
   return (
     <div className="flex-1 space-y-6 max-w-6xl mx-auto w-full p-4">
@@ -102,32 +113,29 @@ export default async function MetaInsightsPage() {
       <div className="flex items-center justify-between mt-8 mb-4">
         <h3 className="text-xl font-semibold">Connected WhatsApp Numbers</h3>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        {waAccounts.length === 0 ? (
-          <div className="col-span-full p-4 border rounded-md text-sm text-muted-foreground bg-muted/50">
-            No WhatsApp accounts connected.
-          </div>
-        ) : (
-          waAccounts.map(account => (
-            <Card key={account.id} className="col-span-2">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{account.name}</CardTitle>
-                {account.status === "CONNECTED" ? (
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                ) : account.status === "UNTESTED" ? (
-                  <AlertCircle className="h-4 w-4 text-yellow-500" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-red-500" />
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl font-bold truncate">{account.phoneNumberId}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Status: {account.status.toLowerCase()}
-                </p>
-              </CardContent>
-            </Card>
-          ))
+      
+      <AccountSelector accounts={waAccounts} selectedId={selectedAccountId} />
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {selectedAccount && (
+          <Card className="col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">{selectedAccount.name}</CardTitle>
+              {selectedAccount.status === "CONNECTED" ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              ) : selectedAccount.status === "UNTESTED" ? (
+                <AlertCircle className="h-4 w-4 text-yellow-500" />
+              ) : (
+                <XCircle className="h-4 w-4 text-red-500" />
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold truncate">{selectedAccount.phoneNumberId}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Status: {selectedAccount.status.toLowerCase()}
+              </p>
+            </CardContent>
+          </Card>
         )}
 
         <Card className="col-span-1 bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-900">

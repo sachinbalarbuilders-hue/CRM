@@ -166,7 +166,8 @@ export async function sendWhatsAppTemplate({
   bizOpaqueCallbackData,
   logBody,
   logMediaType,
-  logMediaUrl
+  logMediaUrl,
+  whatsAppAccountId
 }: {
   organizationId: string;
   phoneNumber: string;
@@ -177,15 +178,21 @@ export async function sendWhatsAppTemplate({
   logBody?: string;
   logMediaType?: string;
   logMediaUrl?: string;
+  whatsAppAccountId?: string;
 }) {
-  const account = await prisma.whatsAppAccount.findFirst({
-    where: { 
-      organizationId,
-      isDefaultOutgoing: true 
-    }
-  }) || await prisma.whatsAppAccount.findFirst({
-    where: { organizationId }
-  });
+  let account;
+  if (whatsAppAccountId) {
+    account = await prisma.whatsAppAccount.findUnique({ where: { id: whatsAppAccountId } });
+  } else {
+    account = await prisma.whatsAppAccount.findFirst({
+      where: { 
+        organizationId,
+        isDefaultOutgoing: true 
+      }
+    }) || await prisma.whatsAppAccount.findFirst({
+      where: { organizationId }
+    });
+  }
 
   if (!account) {
     throw new Error("No connected WhatsApp account found for this organization");
@@ -237,9 +244,25 @@ export async function sendWhatsAppTemplate({
 
   if (!metaResponse.ok) {
     console.error("Meta API Template Error:", metaResult);
+    
+    // Log failed message attempt
+    await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        body: logBody || `[Template: ${templateName}]`,
+        mediaType: logMediaType,
+        mediaUrl: logMediaUrl,
+        direction: "outbound",
+        status: "failed",
+        campaignId: bizOpaqueCallbackData || undefined,
+      }
+    });
+
     const errorCode = metaResult.error?.code || 'Unknown';
     throw new Error(`Meta API error [${errorCode}]: ${metaResult.error?.message || 'Unknown error'}`);
   }
+
+  const waMessageId = metaResult.messages?.[0]?.id;
 
   // Log successful message
   await prisma.message.create({
@@ -249,7 +272,9 @@ export async function sendWhatsAppTemplate({
       mediaType: logMediaType,
       mediaUrl: logMediaUrl,
       direction: "outbound",
-      status: "sent"
+      status: "sent",
+      waMessageId,
+      campaignId: bizOpaqueCallbackData || undefined,
     }
   });
 

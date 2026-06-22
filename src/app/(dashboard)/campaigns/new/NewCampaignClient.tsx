@@ -11,7 +11,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createCampaign, updateCampaign } from "../actions";
+import { createCampaign, updateCampaign, uploadCampaignMedia } from "../actions";
 
 const steps = ["Campaign Details", "Audience", "Content & Review"];
 
@@ -51,12 +51,14 @@ export default function NewCampaignWizard({
   organizationId,
   campaignId,
   initialData,
-  templates = []
+  templates = [],
+  accounts = []
 }: { 
   organizationId: string;
   campaignId?: string;
   initialData?: any;
   templates?: any[];
+  accounts?: any[];
 }) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
@@ -68,13 +70,18 @@ export default function NewCampaignWizard({
   const [campaignType, setCampaignType] = useState(initialData?.type || "marketing");
   const [template, setTemplate] = useState(initialData?.templateName || (templates.length > 0 ? templates[0].name : ""));
   const [variable, setVariable] = useState(initialData?.variableMapping || "name");
+  
+  const [whatsAppAccount, setWhatsAppAccount] = useState(initialData?.whatsAppAccountId || (accounts && accounts.length > 0 ? accounts[0].id : ""));
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
 
   // Audience state
   const [audienceTab, setAudienceTab] = useState<"csv" | "manual">(initialData?.audienceType || "csv");
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvPreview, setCsvPreview] = useState<string[]>([]);
+  const [csvPreview, setCsvPreview] = useState<string[]>(initialData?.audienceList ? initialData.audienceList.slice(0, 5000) : []);
   const [csvError, setCsvError] = useState("");
   const [manualNumbers, setManualNumbers] = useState(initialData?.audienceList ? initialData.audienceList.join("\n") : "");
+  const [finalAudience, setFinalAudience] = useState<string[]>(initialData?.audienceList || []);
   const [parsedCount, setParsedCount] = useState(initialData?.audienceCount || 0);
   const [duplicateCount, setDuplicateCount] = useState(0);
   const [duplicates, setDuplicates] = useState<string[]>([]);
@@ -114,10 +121,11 @@ export default function NewCampaignWizard({
         return cols[0].replace(/[^0-9+]/g, "");
       }).filter(p => p.length >= 7);
       const { unique, dupes } = parseAndDedup(phones);
-      setCsvPreview(unique.slice(0, 5));
-      setParsedCount(unique.length);
+      setFinalAudience(phones);
+      setCsvPreview(phones.slice(0, 5000));
+      setParsedCount(phones.length);
       setDuplicateCount(dupes.length);
-      setDuplicates(dupes.slice(0, 3));
+      setDuplicates(dupes);
     };
     reader.readAsText(file);
   };
@@ -126,16 +134,26 @@ export default function NewCampaignWizard({
     setManualNumbers(val);
     const phones = val.split("\n").map((l: string) => l.trim().replace(/[^0-9+]/g, "")).filter((p: string) => p.length >= 7);
     const { unique, dupes } = parseAndDedup(phones);
-    setParsedCount(unique.length);
+    setFinalAudience(phones);
+    setParsedCount(phones.length);
     setDuplicateCount(dupes.length);
-    setDuplicates(dupes.slice(0, 3));
+    setDuplicates(dupes);
   };
 
   const handleRemoveDuplicates = () => {
     if (audienceTab === "manual") {
       const phones = manualNumbers.split("\n").map((l: string) => l.trim().replace(/[^0-9+]/g, "")).filter((p: string) => p.length >= 7);
       const { unique } = parseAndDedup(phones);
+      setFinalAudience(unique);
       setManualNumbers(unique.join("\n"));
+      setParsedCount(unique.length);
+      setDuplicateCount(0);
+      setDuplicates([]);
+    } else {
+      const { unique } = parseAndDedup(finalAudience);
+      setFinalAudience(unique);
+      setCsvPreview(unique.slice(0, 5000));
+      setParsedCount(unique.length);
       setDuplicateCount(0);
       setDuplicates([]);
     }
@@ -231,9 +249,23 @@ export default function NewCampaignWizard({
                         variant="ghost"
                         size="sm"
                         className="text-destructive hover:text-destructive"
-                        onClick={(e) => { e.stopPropagation(); setCsvFile(null); setCsvPreview([]); setParsedCount(0); }}
+                        onClick={(e) => { e.stopPropagation(); setCsvFile(null); setCsvPreview([]); setParsedCount(0); setFinalAudience([]); setDuplicateCount(0); setDuplicates([]); }}
                       >
                         <X className="h-3.5 w-3.5 mr-1" /> Remove file
+                      </Button>
+                    </div>
+                  ) : finalAudience.length > 0 ? (
+                    <div className="space-y-2">
+                      <FileSpreadsheet className="h-8 w-8 text-green-500 mx-auto" />
+                      <p className="font-medium text-sm">Saved Audience Data</p>
+                      <p className="text-xs text-muted-foreground">{parsedCount} numbers loaded from draft</p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={(e) => { e.stopPropagation(); setFinalAudience([]); setCsvPreview([]); setParsedCount(0); setDuplicateCount(0); setDuplicates([]); }}
+                      >
+                        <X className="h-3.5 w-3.5 mr-1" /> Clear audience
                       </Button>
                     </div>
                   ) : (
@@ -253,15 +285,33 @@ export default function NewCampaignWizard({
 
                 {csvPreview.length > 0 && (
                   <div className="rounded-lg border p-3 space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Preview (first 5)</p>
-                    {csvPreview.map((p, i) => (
-                      <div key={i} className="text-sm font-mono bg-muted/30 rounded px-2 py-1">{p}</div>
-                    ))}
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Preview ({csvPreview.length === parsedCount ? "All" : `First ${csvPreview.length}`})</p>
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-2">
+                      {csvPreview.map((p, i) => {
+                        const isDup = duplicates.includes(p);
+                        return (
+                          <div key={i} className={`text-sm font-mono rounded px-2 py-1.5 flex items-center justify-between transition-colors ${
+                            isDup ? "bg-orange-500/10 text-orange-700 border-l-2 border-orange-500 font-medium" : "bg-muted/30 text-foreground"
+                          }`}>
+                            <span>{p}</span>
+                            {isDup && <span className="text-[10px] uppercase tracking-wider font-bold text-orange-600 bg-orange-500/10 px-1.5 py-0.5 rounded">Duplicate</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                <div className="text-xs text-muted-foreground">
-                  <span className="font-medium">CSV format: </span>phone,name (one per row). Country code required, e.g. 919876543210
+                <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span><span className="font-medium">CSV format:</span> phone,name (one per row). Country code required, e.g. 919876543210</span>
+                  <a 
+                    href="data:text/csv;charset=utf-8,phone,name%0A919876543210,John Doe%0A918888888888,Jane Smith" 
+                    download="sample_audience.csv" 
+                    className="text-blue-500 hover:text-blue-400 hover:underline inline-flex items-center font-medium"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Download Sample CSV
+                  </a>
                 </div>
               </div>
             ) : (
@@ -286,23 +336,21 @@ export default function NewCampaignWizard({
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 text-orange-500 text-sm font-medium mt-0.5">
                     <AlertCircle className="h-4 w-4 shrink-0" />
-                    {duplicateCount} duplicate {duplicateCount === 1 ? "number" : "numbers"} removed automatically
+                    {duplicateCount} duplicate {duplicateCount === 1 ? "number" : "numbers"} detected
                   </div>
-                  {audienceTab === "manual" && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleRemoveDuplicates}
-                      className="h-7 text-xs border-orange-500/30 hover:bg-orange-500/20 text-orange-600 hover:text-orange-700 bg-transparent"
-                    >
-                      Clean List
-                    </Button>
-                  )}
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleRemoveDuplicates}
+                    className="shrink-0 h-8 text-xs border-orange-500/50 text-orange-600 hover:bg-orange-500/10"
+                  >
+                    Remove Duplicates
+                  </Button>
                 </div>
                 {duplicates.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-1">
-                    {duplicates.map((d, i) => (
-                      <span key={i} className="font-mono text-xs bg-orange-500/10 border border-orange-500/20 text-orange-400 rounded px-2 py-0.5">
+                    {duplicates.slice(0, 3).map((d, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-600 border border-orange-500/20 text-xs font-mono">
                         {d}
                       </span>
                     ))}
@@ -320,14 +368,14 @@ export default function NewCampaignWizard({
                 <div className="flex items-center justify-around">
                   <div className="text-center">
                     <p className="text-3xl font-bold">{parsedCount.toLocaleString()}</p>
-                    <p className="text-muted-foreground text-xs mt-1">Unique recipients</p>
+                    <p className="text-muted-foreground text-xs mt-1">Total recipients</p>
                   </div>
                   {duplicateCount > 0 && (
                     <>
                       <div className="w-px h-10 bg-border" />
                       <div className="text-center">
                         <p className="text-3xl font-bold text-orange-500">{duplicateCount.toLocaleString()}</p>
-                        <p className="text-muted-foreground text-xs mt-1">Duplicates removed</p>
+                        <p className="text-muted-foreground text-xs mt-1">Duplicates pending</p>
                       </div>
                     </>
                   )}
@@ -343,6 +391,15 @@ export default function NewCampaignWizard({
             {/* Left: Configuration */}
             <div className="flex-1 space-y-5">
               <div className="space-y-1.5">
+                <Label>WhatsApp Account</Label>
+                <NativeSelect
+                  value={whatsAppAccount}
+                  onChange={setWhatsAppAccount}
+                  options={accounts && accounts.length > 0 ? accounts.map(a => ({ value: a.id, label: a.name })) : [{ value: "", label: "No WhatsApp Accounts found" }]}
+                />
+              </div>
+
+              <div className="space-y-1.5">
                 <Label>WhatsApp Template</Label>
                 <NativeSelect
                   value={template}
@@ -350,6 +407,44 @@ export default function NewCampaignWizard({
                   options={templates.length > 0 ? templates.map(t => ({ value: t.name, label: `${t.name} — ${t.category}` })) : [{ value: "", label: "No approved templates found" }]}
                 />
               </div>
+
+              {(() => {
+                const selectedTpl = templates.find(t => t.name === template);
+                if (selectedTpl && ["image", "video", "document"].includes(selectedTpl.headerType)) {
+                  return (
+                    <div className="space-y-1.5 rounded-lg border border-dashed p-4 bg-muted/10">
+                      <Label>Header Media ({selectedTpl.headerType})</Label>
+                      <input 
+                        type="file" 
+                        ref={mediaInputRef}
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) setMediaFile(f);
+                        }}
+                        accept={selectedTpl.headerType === 'image' ? 'image/*' : selectedTpl.headerType === 'video' ? 'video/*' : '.pdf,.doc,.docx'}
+                      />
+                      <div className="flex items-center gap-3 mt-2">
+                        <Button 
+                          variant="outline" 
+                          onClick={() => mediaInputRef.current?.click()}
+                          className="h-9 gap-2 shrink-0"
+                        >
+                          <Upload className="h-4 w-4" />
+                          Upload Media
+                        </Button>
+                        <span className="text-sm text-muted-foreground truncate">
+                          {mediaFile ? mediaFile.name : initialData?.mediaUrl ? "Using existing media" : "No file chosen (required for sending)"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        You must upload the actual {selectedTpl.headerType} to be sent in this campaign.
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               <div className="space-y-3 rounded-lg border p-4 bg-muted/10">
                 <h4 className="font-medium text-sm">Variable Mapping</h4>
@@ -388,7 +483,27 @@ export default function NewCampaignWizard({
                     
                     return (
                       <>
-                        {selectedTpl.headerContent && (
+                        {selectedTpl.headerType?.toLowerCase() === "image" ? (
+                          <div className="mb-2 -mx-3 -mt-3">
+                            {mediaFile ? (
+                              <img src={URL.createObjectURL(mediaFile)} alt="Header" className="w-full h-32 object-cover rounded-t-lg" />
+                            ) : initialData?.mediaUrl ? (
+                              <img src={initialData.mediaUrl} alt="Header" className="w-full h-32 object-cover rounded-t-lg" />
+                            ) : selectedTpl.headerContent ? (
+                              <img src={selectedTpl.headerContent} alt="Header" className="w-full h-32 object-cover rounded-t-lg" />
+                            ) : (
+                              <div className="w-full h-32 bg-zinc-200 rounded-t-lg flex items-center justify-center text-xs text-zinc-500">Image Preview</div>
+                            )}
+                          </div>
+                        ) : selectedTpl.headerType?.toLowerCase() === "video" ? (
+                          <div className="mb-2 -mx-3 -mt-3 w-full h-32 bg-zinc-800 rounded-t-lg flex items-center justify-center text-xs text-white">
+                            ▶ Video Attachment
+                          </div>
+                        ) : selectedTpl.headerType?.toLowerCase() === "document" ? (
+                          <div className="mb-2 p-2 bg-zinc-100 rounded border border-zinc-200 text-xs flex items-center gap-2">
+                            📄 Document Attachment
+                          </div>
+                        ) : selectedTpl.headerContent && (
                           <div className="font-bold mb-1 text-sm">{selectedTpl.headerContent}</div>
                         )}
                         <div className="whitespace-pre-wrap text-[13px]">
@@ -482,6 +597,14 @@ export default function NewCampaignWizard({
                   if (!campaignName) return;
                   setIsSaving(true);
                   try {
+                    let uploadedMediaUrl = initialData?.mediaUrl;
+                    if (mediaFile) {
+                      const formData = new FormData();
+                      formData.append("file", mediaFile);
+                      const res = await uploadCampaignMedia(formData);
+                      uploadedMediaUrl = res.publicUrl;
+                    }
+
                     const data = {
                       name: campaignName,
                       description,
@@ -489,10 +612,12 @@ export default function NewCampaignWizard({
                       templateName: template,
                       variableMapping: variable,
                       audienceType: audienceTab,
-                      audienceList: manualNumbers ? manualNumbers.split("\n") : [],
+                      audienceList: finalAudience,
                       audienceCount: parsedCount,
                       status: "Draft",
                       organizationId,
+                      whatsAppAccountId: whatsAppAccount,
+                      mediaUrl: uploadedMediaUrl,
                     };
                     if (campaignId) {
                       await updateCampaign(campaignId, data);
@@ -522,6 +647,14 @@ export default function NewCampaignWizard({
                   onClick={async () => {
                     setIsSaving(true);
                     try {
+                      let uploadedMediaUrl = initialData?.mediaUrl;
+                      if (mediaFile) {
+                        const formData = new FormData();
+                        formData.append("file", mediaFile);
+                        const res = await uploadCampaignMedia(formData);
+                        uploadedMediaUrl = res.publicUrl;
+                      }
+
                       const data = {
                         name: campaignName,
                         description,
@@ -529,10 +662,12 @@ export default function NewCampaignWizard({
                         templateName: template,
                         variableMapping: variable,
                         audienceType: audienceTab,
-                        audienceList: manualNumbers ? manualNumbers.split("\n") : [],
+                        audienceList: finalAudience,
                         audienceCount: parsedCount,
                         status: "Active",
                         organizationId,
+                        whatsAppAccountId: whatsAppAccount,
+                        mediaUrl: uploadedMediaUrl,
                       };
                       if (campaignId) {
                         await updateCampaign(campaignId, data);

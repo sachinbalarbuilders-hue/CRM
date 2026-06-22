@@ -113,6 +113,11 @@ export async function deleteOrganization() {
     take: 1
   });
   
+  // Manually delete related entities that lack onDelete: Cascade
+  await prisma.project.deleteMany({ where: { organizationId: activeOrganizationId } });
+  await prisma.lead.deleteMany({ where: { organizationId: activeOrganizationId } });
+  await prisma.whatsAppAccount.deleteMany({ where: { organizationId: activeOrganizationId } });
+  
   // Delete the organization
   await prisma.organization.delete({
     where: { id: activeOrganizationId }

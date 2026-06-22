@@ -53,11 +53,17 @@ const navMain = [
 ];
 
 const navMessaging = [
-  { name: "Chatbot", href: "/chatbot", icon: Bot, section: "chatbot" },
+  { 
+    name: "Chatbot", 
+    icon: Bot, 
+    section: "chatbot",
+    items: [
+      { name: "Flows", href: "/flow-builder", section: "flows" },
+      { name: "Transfers", href: "/transfers", section: "inbox" }
+    ]
+  },
   { name: "Campaigns", href: "/campaigns", icon: Megaphone, section: "campaigns" },
   { name: "Templates", href: "/templates", icon: LayoutTemplate, section: "templates" },
-  { name: "Flows", href: "/flow-builder", icon: GitMerge, section: "flows" },
-  { name: "Transfers", href: "/transfers", icon: Headset, section: "inbox" },
   { name: "Meta Insights", href: "/meta-insights", icon: BarChart, section: "meta-insights" },
 ];
 
@@ -208,14 +214,39 @@ export function AppSidebar({
           <SidebarGroupLabel className="text-xs uppercase tracking-wider">Messaging</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navMessaging.filter(item => canView(item.section)).map((item) => (
-                <SidebarMenuItem key={item.name}>
-                  <SidebarMenuButton render={<Link href={item.href} />} isActive={pathname?.startsWith(item.href)}>
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.name}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navMessaging.filter(item => canView(item.section)).map((item) => {
+                if (item.items) {
+                  const visibleItems = item.items.filter(sub => canView(sub.section));
+                  return (
+                    <SidebarMenuItem key={item.name}>
+                      <SidebarMenuButton className="font-medium text-foreground/80">
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.name}</span>
+                      </SidebarMenuButton>
+                      {visibleItems.length > 0 && (
+                        <SidebarMenuSub>
+                          {visibleItems.map((subItem) => (
+                            <SidebarMenuSubItem key={subItem.name}>
+                              <SidebarMenuSubButton render={<Link href={subItem.href} />} isActive={pathname?.startsWith(subItem.href)}>
+                                <span>{subItem.name}</span>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      )}
+                    </SidebarMenuItem>
+                  );
+                }
+                
+                return (
+                  <SidebarMenuItem key={item.name}>
+                    <SidebarMenuButton render={<Link href={item.href} />} isActive={pathname?.startsWith(item.href)}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.name}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

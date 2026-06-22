@@ -140,6 +140,7 @@ model WhatsAppAccount {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   templates         Template[]
+  campaigns         Campaign[]
 }
 
 model Conversation {
@@ -184,6 +185,9 @@ model Message {
   mediaName       String?      // Original filename (for PDFs/docs)
   waMessageId     String?      // Meta WhatsApp message ID
   
+  campaignId      String?
+  campaign        Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 }
@@ -202,10 +206,15 @@ model Campaign {
   deliveredCount  Int          @default(0)
   readCount       Int          @default(0)
   repliedCount    Int          @default(0)
+  
+  messages        Message[]    // Messages sent as part of this campaign
   sentAt          DateTime?
   
   organizationId  String
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  whatsAppAccountId String?
+  whatsAppAccount   WhatsAppAccount? @relation(fields: [whatsAppAccountId], references: [id], onDelete: SetNull)
   
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
