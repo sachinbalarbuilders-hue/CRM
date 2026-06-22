@@ -81,18 +81,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = token.role as string;
         session.user.organizationId = token.organizationId as string;
-        
-        // Dynamically override organizationId if the cookie is present
-        try {
-          const { cookies } = await import("next/headers");
-          const cookieStore = await cookies();
-          const activeOrg = cookieStore.get("activeOrganizationId");
-          if (activeOrg) {
-            session.user.organizationId = activeOrg.value;
-          }
-        } catch (e) {
-          // Ignore if cookies are not available in this context
-        }
       }
       return session;
     }
