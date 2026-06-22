@@ -16,6 +16,8 @@ interface ConversationListProps {
   organizations: { id: string; name: string }[];
   activeOrganizationId: string;
   orgSettings?: Record<string, any>;
+  filter: "open" | "all";
+  setFilter: (filter: "open" | "all") => void;
 }
 
 export function ConversationList({ 
@@ -25,6 +27,8 @@ export function ConversationList({
   organizations,
   activeOrganizationId,
   orgSettings = {},
+  filter,
+  setFilter,
 }: ConversationListProps) {
   const [search, setSearch] = useState("");
 
@@ -58,6 +62,21 @@ export function ConversationList({
         />
       </div>
       
+      <div className="flex border-b text-sm">
+        <button 
+          onClick={() => setFilter("open")}
+          className={`flex-1 py-2 text-center transition-colors ${filter === "open" ? "border-b-2 border-primary font-medium text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+        >
+          Open
+        </button>
+        <button 
+          onClick={() => setFilter("all")}
+          className={`flex-1 py-2 text-center transition-colors ${filter === "all" ? "border-b-2 border-primary font-medium text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+        >
+          All
+        </button>
+      </div>
+
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-1 p-2">
           {filteredConversations.length === 0 ? (

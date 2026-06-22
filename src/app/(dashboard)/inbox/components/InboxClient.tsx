@@ -16,6 +16,7 @@ interface InboxClientProps {
 export function InboxClient({ initialConversations, organizationId, organizations, orgSettings = {} }: InboxClientProps) {
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
   const [activeConversationId, setActiveConversationIdState] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"open" | "all">("open");
 
   // Initialize from URL on mount
   useEffect(() => {
@@ -87,15 +88,19 @@ export function InboxClient({ initialConversations, organizationId, organization
     ? conversations.find(c => c.id === activeConversationId) || null
     : null;
 
+  const visibleConversations = conversations.filter(c => filter === "all" || c.status === "open");
+
   return (
     <>
       <ConversationList 
-        conversations={conversations}
+        conversations={visibleConversations}
         activeConversationId={activeConversationId}
         onSelectConversation={setActiveConversationId}
         organizations={organizations}
         activeOrganizationId={organizationId}
         orgSettings={orgSettings}
+        filter={filter}
+        setFilter={setFilter}
       />
       <ChatWindow 
         conversation={activeConversation}

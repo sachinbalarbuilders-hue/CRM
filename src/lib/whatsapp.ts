@@ -208,7 +208,7 @@ export async function sendWhatsAppTemplate({
       data: {
         phoneNumber,
         organizationId,
-        status: "open"
+        status: "archived" // Campaigns are archived until they reply
       }
     });
   }
