@@ -2,8 +2,6 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
 
 // In a real app you'd want a singleton pattern for PrismaClient
 // to avoid exhausting DB connections during hot reloads...
@@ -11,17 +9,7 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Next.js edge runtime / build might evaluate this file without DATABASE_URL
-const connectionString = process.env.DATABASE_URL || "postgresql://dummy:dummy@localhost/dummy";
-
-const pool = new Pool({ 
-  connectionString,
-  max: 2, // Limit concurrent connections per Vercel container to prevent connection exhaustion
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
-const adapter = new PrismaPg(pool);
-const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
+const prisma = globalForPrisma.prisma ?? new PrismaClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
