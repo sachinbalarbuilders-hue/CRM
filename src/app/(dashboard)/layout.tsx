@@ -63,6 +63,9 @@ export default async function DashboardLayout({
       } else if (activeMembership.customRole?.permissions) {
         // Regular member with a custom role — enforce permissions
         userPermissions = activeMembership.customRole.permissions as PermissionsMap;
+      } else {
+        // Member with no custom role (e.g. EXECUTIVE defaults) gets empty permissions
+        userPermissions = {} as PermissionsMap;
       }
     }
   }

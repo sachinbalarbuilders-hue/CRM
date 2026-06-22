@@ -33,7 +33,13 @@ export default function RolesPage() {
 
   const loadRoles = () => {
     setLoading(true);
-    getRoles().then(r => { setRoles(r); setLoading(false); });
+    getRoles()
+      .then(r => { setRoles(r); })
+      .catch((e) => {
+        console.error("Failed to load roles:", e);
+        toast.error(e.message || "Failed to load roles");
+      })
+      .finally(() => { setLoading(false); });
   };
 
   useEffect(() => { loadRoles(); }, []);

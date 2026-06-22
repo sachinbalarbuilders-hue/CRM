@@ -50,11 +50,18 @@ export default function UsersPage() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([getOrgMembers(), getRoles()]).then(([m, r]) => {
-      setMembers(m);
-      setRoles(r);
-      setLoading(false);
-    });
+    Promise.all([getOrgMembers(), getRoles()])
+      .then(([m, r]) => {
+        setMembers(m);
+        setRoles(r);
+      })
+      .catch((e) => {
+        console.error("Failed to load users:", e);
+        toast.error(e.message || "Failed to load users");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
 
   useEffect(() => { load(); }, []);
