@@ -4,7 +4,7 @@ import { prisma, auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { v4 as uuidv4 } from "uuid";
-import { assertPermission } from "@/lib/permissions";
+import { assertPermission, getActiveOrgId } from "@/lib/permissions";
 
 export async function uploadCampaignMedia(formData: FormData) {
   try {
@@ -50,8 +50,8 @@ export async function uploadCampaignMedia(formData: FormData) {
 export async function getCampaigns(organizationId: string) {
   try {
     await assertPermission("campaigns", "view");
-    const session = await auth();
-    if (!session?.user || session.user.organizationId !== organizationId) throw new Error("Unauthorized");
+    const activeOrgId = await getActiveOrgId();
+    if (activeOrgId !== organizationId) throw new Error("Unauthorized for this organization");
 
     const campaigns = await prisma.campaign.findMany({
       where: { organizationId },
@@ -70,8 +70,9 @@ export async function getCampaign(id: string) {
     const session = await auth();
     if (!session?.user) throw new Error("Unauthorized");
 
+    const activeOrgId = await getActiveOrgId();
     const campaign = await prisma.campaign.findUnique({
-      where: { id, organizationId: session.user.organizationId },
+      where: { id, organizationId: activeOrgId },
     });
     return campaign;
   } catch (error) {
@@ -96,8 +97,8 @@ export async function createCampaign(data: {
 }) {
   try {
     await assertPermission("campaigns", "create");
-    const session = await auth();
-    if (!session?.user || session.user.organizationId !== data.organizationId) throw new Error("Unauthorized");
+    const activeOrgId = await getActiveOrgId();
+    if (activeOrgId !== data.organizationId) throw new Error("Unauthorized for this organization");
 
     const campaign = await prisma.campaign.create({
       data: {
@@ -146,8 +147,9 @@ export async function updateCampaign(id: string, data: {
     const session = await auth();
     if (!session?.user) throw new Error("Unauthorized");
 
+    const activeOrgId = await getActiveOrgId();
     const campaign = await prisma.campaign.update({
-      where: { id, organizationId: session.user.organizationId },
+      where: { id, organizationId: activeOrgId },
       data: {
         name: data.name,
         description: data.description,
@@ -358,8 +360,9 @@ export async function deleteCampaign(id: string) {
     const session = await auth();
     if (!session?.user) throw new Error("Unauthorized");
 
+    const activeOrgId = await getActiveOrgId();
     await prisma.campaign.delete({
-      where: { id, organizationId: session.user.organizationId },
+      where: { id, organizationId: activeOrgId },
     });
     
     revalidatePath("/campaigns");

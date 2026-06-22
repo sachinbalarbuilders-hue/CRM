@@ -2,14 +2,15 @@ import { auth } from "@/auth";
 import { prisma } from "@/auth";
 import { redirect } from "next/navigation";
 import { ProjectCard, ProjectModal } from "./project-components";
+import { getActiveOrgId } from "@/lib/permissions";
 
 export default async function ProjectsPage() {
   const session = await auth();
   const userId = session?.user?.id;
-  const orgId = session?.user?.organizationId;
+  const orgId = await getActiveOrgId();
 
   if (!userId || !orgId) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
   // Fetch real projects from database

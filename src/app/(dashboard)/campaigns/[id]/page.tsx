@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { getActiveOrgId } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import { prisma } from "@/auth";
 import CampaignStatisticsClient from "./CampaignStatisticsClient";
@@ -6,7 +7,7 @@ import CampaignStatisticsClient from "./CampaignStatisticsClient";
 export default async function CampaignDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
-  const organizationId = session?.user?.organizationId;
+  const organizationId = await getActiveOrgId();
 
   if (!organizationId) {
     redirect("/login");

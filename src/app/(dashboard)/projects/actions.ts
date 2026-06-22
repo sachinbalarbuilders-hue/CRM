@@ -3,7 +3,7 @@
 import { prisma, auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
-import { assertPermission } from "@/lib/permissions";
+import { assertPermission, getActiveOrgId } from "@/lib/permissions";
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || "";
@@ -64,9 +64,9 @@ export async function createProject(data: {
 }) {
   try {
     await assertPermission("projects", "create");
-    const session = await auth();
-    if (!session?.user || session.user.organizationId !== data.organizationId) {
-      return { success: false, error: "Unauthorized" };
+    const activeOrgId = await getActiveOrgId();
+    if (activeOrgId !== data.organizationId) {
+      return { success: false, error: "Unauthorized for this organization" };
     }
 
     const project = await prisma.project.create({
@@ -102,11 +102,10 @@ export async function updateProject(id: string, data: {
 }) {
   try {
     await assertPermission("projects", "edit");
-    const session = await auth();
-    if (!session?.user) return { success: false, error: "Unauthorized" };
+    const activeOrgId = await getActiveOrgId();
 
     const project = await prisma.project.update({
-      where: { id, organizationId: session.user.organizationId },
+      where: { id, organizationId: activeOrgId },
       data,
     });
     revalidatePath("/projects");
@@ -120,11 +119,10 @@ export async function updateProject(id: string, data: {
 export async function deleteProject(id: string) {
   try {
     await assertPermission("projects", "delete");
-    const session = await auth();
-    if (!session?.user) return { success: false, error: "Unauthorized" };
+    const activeOrgId = await getActiveOrgId();
 
     await prisma.project.delete({
-      where: { id, organizationId: session.user.organizationId },
+      where: { id, organizationId: activeOrgId },
     });
     revalidatePath("/projects");
     return { success: true };

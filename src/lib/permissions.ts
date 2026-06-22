@@ -50,3 +50,12 @@ export async function assertPermission(section: string, action: PermAction) {
 
   return session;
 }
+
+export async function getActiveOrgId() {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+  const cookieStore = await cookies();
+  const orgId = cookieStore.get("activeOrganizationId")?.value || session.user.organizationId;
+  if (!orgId) throw new Error("No active organization");
+  return orgId as string;
+}

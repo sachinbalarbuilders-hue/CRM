@@ -1,14 +1,14 @@
 import { prisma, auth } from "@/auth";
 import { redirect } from "next/navigation";
 import TransfersClient from "./TransfersClient";
+import { getActiveOrgId } from "@/lib/permissions";
 
 export default async function TransfersPage() {
-  const session = await auth();
-  if (!session?.user?.organizationId) {
-    redirect("/auth/login");
-  }
+  const organizationId = await getActiveOrgId();
 
-  const organizationId = session.user.organizationId;
+  if (!organizationId) {
+    redirect("/login");
+  }
 
   // Fetch conversations that are open, unassigned, and not actively handled by a flow (bot)
   const waitingConversations = await prisma.conversation.findMany({

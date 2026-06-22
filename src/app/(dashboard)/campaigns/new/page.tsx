@@ -1,11 +1,12 @@
 import { auth } from "@/auth";
+import { getActiveOrgId } from "@/lib/permissions";
 import { redirect } from "next/navigation";
 import NewCampaignWizard from "./NewCampaignClient";
 import { prisma } from "@/auth";
 
 export default async function NewCampaignPage() {
   const session = await auth();
-  const organizationId = session?.user?.organizationId;
+  const organizationId = await getActiveOrgId();
 
   if (!organizationId) {
     redirect("/login");
@@ -22,3 +23,4 @@ export default async function NewCampaignPage() {
 
   return <NewCampaignWizard organizationId={organizationId} templates={templates} accounts={accounts} />;
 }
+
