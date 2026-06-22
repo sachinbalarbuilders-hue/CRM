@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
+import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 // In a real app you'd want a singleton pattern for PrismaClient
 // to avoid exhausting DB connections during hot reloads...
@@ -13,7 +15,12 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = "postgresql://dummy:dummy@localhost/dummy";
 }
 
-const prisma = globalForPrisma.prisma ?? new PrismaClient();
+const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL 
+});
+
+const adapter = new PrismaPg(pool);
+const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
